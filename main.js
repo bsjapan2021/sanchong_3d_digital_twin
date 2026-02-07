@@ -149,7 +149,7 @@ const loader = new GLTFLoader(manager);
 const loadingElement = document.getElementById('loading');
 
 loader.load(
-    'sanchong.glb',
+    '/sanchong.glb',
     (gltf) => {
         model = gltf.scene;
         
