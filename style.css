@@ -1,0 +1,235 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+#canvas-container {
+    width: 100vw;
+    height: 100vh;
+}
+
+#info {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+}
+
+#info h1 {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+#info p {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+#controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 15px;
+    z-index: 100;
+}
+
+#controls button {
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+#controls button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+#loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 30px 50px;
+    border-radius: 15px;
+    z-index: 200;
+    backdrop-filter: blur(10px);
+}
+
+#loading.hidden {
+    display: none;
+}
+
+#time-control {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    min-width: 250px;
+}
+
+#time-control label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+#timeSlider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    outline: none;
+    cursor: pointer;
+}
+
+#timeSlider::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffd700;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+}
+
+#timeSlider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffd700;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+}
+
+#timeDisplay {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+#timeInfo {
+    margin-top: 10px;
+    font-size: 14px;
+    text-align: center;
+    padding: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+}
+
+#flood-control {
+    position: absolute;
+    bottom: 100px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    min-width: 250px;
+    border: 2px solid rgba(255, 100, 100, 0.3);
+}
+
+#flood-control label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+#floodSlider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    outline: none;
+    cursor: pointer;
+}
+
+#floodSlider::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ff4444;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.8);
+}
+
+#floodSlider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ff4444;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.8);
+}
+
+#floodLevel {
+    color: #ff6666;
+    font-weight: bold;
+}
+
+#floodInfo {
+    margin-top: 10px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.flood-status {
+    padding: 5px;
+    background: rgba(255, 68, 68, 0.2);
+    border-radius: 5px;
+    text-align: center;
+}
+
+.flood-rainfall {
+    padding: 5px;
+    background: rgba(100, 150, 255, 0.2);
+    border-radius: 5px;
+    text-align: center;
+    color: #88bbff;
+}
+
+.flood-rainfall strong {
+    color: #66aaff;
+    font-size: 14px;
+}
+
+.flood-percentage {
+    padding: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    text-align: center;
+}

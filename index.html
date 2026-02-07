@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Digital Twin - 산청군 수해 취약지역</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="info">
+        <h1>경상남도 산청군 2025년 수해 취약지역</h1>
+        <p>마우스로 회전 | 휠로 확대/축소 | 우클릭으로 이동</p>
+    </div>
+    <div id="canvas-container"></div>
+    <div id="controls">
+        <button id="resetCamera">카메라 리셋</button>
+        <button id="toggleWireframe">와이어프레임</button>
+        <button id="toggleFlood">침수지역 표시</button>
+    </div>
+    <div id="time-control">
+        <label for="timeSlider">시간: <span id="timeDisplay">12:00</span></label>
+        <input type="range" id="timeSlider" min="0" max="24" step="0.5" value="12">
+        <div id="timeInfo">낮</div>
+    </div>
+    <div id="flood-control">
+        <label for="floodSlider">침수 수위: <span id="floodLevel">72%</span></label>
+        <input type="range" id="floodSlider" min="0" max="100" step="1" value="72">
+        <div id="floodInfo">
+            <span class="flood-status">⚠️ 위험 수위</span>
+            <span class="flood-rainfall">🌧️ 예상 강수량: <strong>310mm</strong></span>
+            <span class="flood-percentage">72% 침수</span>
+        </div>
+    </div>
+    <div id="loading">모델 로딩 중...</div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>

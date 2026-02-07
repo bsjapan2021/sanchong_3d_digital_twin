@@ -1,0 +1,4 @@
+node_modules/
+3d_digital_twin/
+*.backup
+.DS_Store
