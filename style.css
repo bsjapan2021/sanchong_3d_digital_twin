@@ -233,3 +233,108 @@ body {
     border-radius: 5px;
     text-align: center;
 }
+
+/* 실시간 기상 데이터 패널 */
+#weather-control {
+    position: absolute;
+    top: 180px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    min-width: 280px;
+    border: 2px solid rgba(100, 150, 255, 0.3);
+}
+
+.weather-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.weather-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #88bbff;
+}
+
+.auto-btn {
+    padding: 5px 12px;
+    background: rgba(255, 68, 68, 0.3);
+    border: 1px solid rgba(255, 68, 68, 0.5);
+    color: white;
+    border-radius: 15px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.auto-btn.active {
+    background: rgba(68, 255, 68, 0.3);
+    border: 1px solid rgba(68, 255, 68, 0.5);
+}
+
+.auto-btn:hover {
+    transform: scale(1.05);
+}
+
+.weather-data {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.weather-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+}
+
+.weather-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.weather-item .label {
+    font-size: 11px;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.weather-item .value {
+    font-size: 16px;
+    font-weight: bold;
+    color: #88bbff;
+}
+
+#currentRainfall {
+    color: #66aaff;
+}
+
+#totalRainfall {
+    color: #88bbff;
+}
+
+#temperature {
+    color: #ffaa66;
+}
+
+#humidity {
+    color: #88ffbb;
+}
+
+#dataSource {
+    font-size: 10px;
+    opacity: 0.6;
+    color: #aaa;
+}
+

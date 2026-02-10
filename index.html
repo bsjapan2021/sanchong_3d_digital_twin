@@ -31,6 +31,34 @@
             <span class="flood-percentage">72% 침수</span>
         </div>
     </div>
+    <div id="weather-control">
+        <div class="weather-header">
+            <h3>🛰️ 실시간 기상 데이터</h3>
+            <button id="toggleAutoUpdate" class="auto-btn active">자동 업데이트 ON</button>
+        </div>
+        <div class="weather-data">
+            <div class="weather-item">
+                <span class="label">현재 강수량:</span>
+                <span id="currentRainfall" class="value">-- mm/h</span>
+            </div>
+            <div class="weather-item">
+                <span class="label">누적 강수량:</span>
+                <span id="totalRainfall" class="value">-- mm</span>
+            </div>
+            <div class="weather-item">
+                <span class="label">기온:</span>
+                <span id="temperature" class="value">-- °C</span>
+            </div>
+            <div class="weather-item">
+                <span class="label">습도:</span>
+                <span id="humidity" class="value">-- %</span>
+            </div>
+            <div class="weather-item full-width">
+                <span class="label">데이터 출처:</span>
+                <span id="dataSource" class="value">기상청 (업데이트 대기중...)</span>
+            </div>
+        </div>
+    </div>
     <div id="loading">모델 로딩 중...</div>
     <script type="module" src="main.js"></script>
 </body>

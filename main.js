@@ -2,6 +2,164 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
+// =====================================
+// 기상청 API 연동 클래스
+// =====================================
+class WeatherAPI {
+    constructor() {
+        // 기상청 API 키 (공공데이터포털에서 발급 필요)
+        // 현재는 Mock 데이터 사용
+        this.useRealAPI = false; // true로 변경 시 실제 API 사용
+        this.apiKey = 'YOUR_API_KEY_HERE';
+        this.updateInterval = 10 * 60 * 1000; // 10분마다 업데이트
+        this.autoUpdate = true;
+        
+        // 산청군 좌표 (기상청 격자)
+        this.nx = 89; // 격자 X
+        this.ny = 90; // 격자 Y
+        
+        this.currentData = {
+            rainfall: 0,      // 1시간 강수량 (mm)
+            totalRainfall: 0, // 누적 강수량
+            temperature: 0,   // 기온 (°C)
+            humidity: 0,      // 습도 (%)
+            lastUpdate: null
+        };
+    }
+    
+    // 날짜/시간 포맷 (YYYYMMDD, HHmm)
+    getDateTime() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = '00'; // 정시 기준
+        
+        return {
+            date: `${year}${month}${day}`,
+            time: `${hours}${minutes}`
+        };
+    }
+    
+    // Mock 데이터 생성 (실제 API 없을 때)
+    generateMockData() {
+        const hour = new Date().getHours();
+        
+        // 시간대별 강수 패턴 시뮬레이션
+        let rainfall = 0;
+        if (hour >= 14 && hour <= 18) {
+            // 오후 집중호우 시나리오
+            rainfall = Math.random() * 50 + 20; // 20-70mm/h
+        } else if (hour >= 9 && hour <= 20) {
+            // 낮 시간 보통 비
+            rainfall = Math.random() * 15; // 0-15mm/h
+        } else {
+            // 야간/새벽 약한 비
+            rainfall = Math.random() * 5; // 0-5mm/h
+        }
+        
+        this.currentData = {
+            rainfall: Math.round(rainfall * 10) / 10,
+            totalRainfall: Math.round((rainfall * 3 + Math.random() * 50) * 10) / 10,
+            temperature: Math.round((20 + Math.random() * 10) * 10) / 10,
+            humidity: Math.round(60 + Math.random() * 30),
+            lastUpdate: new Date()
+        };
+        
+        return this.currentData;
+    }
+    
+    // 기상청 초단기실황 API 호출
+    async fetchRealData() {
+        if (!this.useRealAPI) {
+            return this.generateMockData();
+        }
+        
+        try {
+            const { date, time } = this.getDateTime();
+            const url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst';
+            const params = new URLSearchParams({
+                serviceKey: this.apiKey,
+                numOfRows: '10',
+                pageNo: '1',
+                dataType: 'JSON',
+                base_date: date,
+                base_time: time,
+                nx: this.nx,
+                ny: this.ny
+            });
+            
+            const response = await fetch(`${url}?${params}`);
+            const data = await response.json();
+            
+            if (data.response.header.resultCode === '00') {
+                const items = data.response.body.items.item;
+                
+                items.forEach(item => {
+                    switch(item.category) {
+                        case 'RN1': // 1시간 강수량
+                            this.currentData.rainfall = parseFloat(item.obsrValue);
+                            break;
+                        case 'T1H': // 기온
+                            this.currentData.temperature = parseFloat(item.obsrValue);
+                            break;
+                        case 'REH': // 습도
+                            this.currentData.humidity = parseFloat(item.obsrValue);
+                            break;
+                    }
+                });
+                
+                this.currentData.lastUpdate = new Date();
+            }
+            
+            return this.currentData;
+        } catch (error) {
+            console.warn('기상청 API 호출 실패, Mock 데이터 사용:', error);
+            return this.generateMockData();
+        }
+    }
+    
+    // 강수량 기반 침수 레벨 계산
+    calculateFloodLevel(rainfall) {
+        // 강수량(mm/h) → 침수 레벨(0-100%)
+        if (rainfall === 0) return 0;
+        if (rainfall < 10) return rainfall * 3;
+        if (rainfall < 30) return 30 + (rainfall - 10) * 2;
+        if (rainfall < 50) return 70 + (rainfall - 30) * 1;
+        return Math.min(100, 90 + (rainfall - 50) * 0.5);
+    }
+    
+    // 자동 업데이트 시작
+    startAutoUpdate(callback) {
+        this.autoUpdate = true;
+        
+        // 즉시 첫 데이터 로드
+        this.fetchRealData().then(callback);
+        
+        // 주기적 업데이트
+        this.intervalId = setInterval(() => {
+            if (this.autoUpdate) {
+                this.fetchRealData().then(callback);
+            }
+        }, this.updateInterval);
+        
+        console.log('✅ 실시간 기상 데이터 자동 업데이트 시작 (10분 주기)');
+    }
+    
+    // 자동 업데이트 중지
+    stopAutoUpdate() {
+        this.autoUpdate = false;
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+        }
+        console.log('⏸️ 실시간 기상 데이터 자동 업데이트 중지');
+    }
+}
+
+// 전역 WeatherAPI 인스턴스
+const weatherAPI = new WeatherAPI();
+
 // Scene 설정
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a0a);
@@ -406,6 +564,55 @@ floodSlider.addEventListener('input', (e) => {
 console.log('💡 침수 지역 표시: "침수지역 표시" 버튼 클릭');
 console.log('💡 또는 콘솔에서 toggleFloodZone() 함수 실행');
 console.log('💡 침수 수위 조절: 우측 하단 슬라이더 사용');
+
+// =====================================
+// 실시간 기상 데이터 UI 업데이트
+// =====================================
+function updateWeatherUI(data) {
+    document.getElementById('currentRainfall').textContent = `${data.rainfall} mm/h`;
+    document.getElementById('totalRainfall').textContent = `${data.totalRainfall} mm`;
+    document.getElementById('temperature').textContent = `${data.temperature} °C`;
+    document.getElementById('humidity').textContent = `${data.humidity} %`;
+    
+    const updateTime = data.lastUpdate ? data.lastUpdate.toLocaleTimeString('ko-KR') : '--';
+    const source = weatherAPI.useRealAPI ? '기상청 API' : '시뮬레이션';
+    document.getElementById('dataSource').textContent = `${source} (${updateTime})`;
+    
+    // 강수량 기반 자동 침수 레벨 업데이트 (자동 모드일 때만)
+    if (weatherAPI.autoUpdate) {
+        const floodLevel = weatherAPI.calculateFloodLevel(data.rainfall);
+        const floodSlider = document.getElementById('floodSlider');
+        floodSlider.value = floodLevel;
+        
+        // 슬라이더 변경 이벤트 트리거
+        floodSlider.dispatchEvent(new Event('input'));
+        
+        console.log(`🌧️ 강수량 ${data.rainfall}mm/h → 침수 레벨 ${floodLevel}% 자동 설정`);
+    }
+}
+
+// 자동 업데이트 토글 버튼
+const toggleAutoBtn = document.getElementById('toggleAutoUpdate');
+if (toggleAutoBtn) {
+    toggleAutoBtn.addEventListener('click', () => {
+        if (weatherAPI.autoUpdate) {
+            weatherAPI.stopAutoUpdate();
+            toggleAutoBtn.textContent = '자동 업데이트 OFF';
+            toggleAutoBtn.classList.remove('active');
+        } else {
+            weatherAPI.startAutoUpdate(updateWeatherUI);
+            toggleAutoBtn.textContent = '자동 업데이트 ON';
+            toggleAutoBtn.classList.add('active');
+        }
+    });
+}
+
+// 실시간 기상 데이터 자동 업데이트 시작
+weatherAPI.startAutoUpdate(updateWeatherUI);
+
+console.log('🛰️ 실시간 기상 데이터 연동 시작');
+console.log('💡 Mock 데이터 사용 중 (실제 API 사용: weatherAPI.useRealAPI = true)');
+console.log('💡 기상청 API 키 설정: weatherAPI.apiKey = "YOUR_KEY"');
 
 // 애니메이션 루프
 function animate() {
