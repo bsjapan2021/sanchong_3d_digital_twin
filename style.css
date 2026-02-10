@@ -616,8 +616,8 @@ body {
 /* AI 예측 패널 */
 #prediction-panel {
     position: absolute;
-    bottom: 250px;
-    left: 20px;
+    bottom: 280px;
+    left: 360px;
     background: rgba(0, 0, 0, 0.7);
     padding: 20px;
     border-radius: 10px;

@@ -697,19 +697,20 @@ class Cloud3DParticles {
         const sizes = [];
         
         for (let i = 0; i < this.particleCount; i++) {
-            // 산청군 영역 내 랜덤 위치
-            const x = (Math.random() - 0.5) * 60;
-            const z = (Math.random() - 0.5) * 60;
+            // 산청군 영역 내 랜덤 위치 (모델 범위에 맞춤)
+            const x = (Math.random() - 0.5) * 40;
+            const z = (Math.random() - 0.5) * 40;
             
-            // 구름 높이 (5km ~ 15km)
-            const height = 5 + Math.random() * 10;
+            // 구름 높이 (모델 바로 위 10~25 높이)
+            // 지형 최고점 + 여유 공간
+            const height = 10 + Math.random() * 15;
             
             // 높이에 따른 색상 (낮을수록 어둡게)
-            const brightness = 0.6 + (height / 15) * 0.4;
+            const brightness = 0.6 + (height / 25) * 0.4;
             colors.push(brightness, brightness, brightness + 0.1);
             
             // 높이에 따른 크기
-            sizes.push(0.2 + (height / 15) * 0.3);
+            sizes.push(0.3 + (height / 25) * 0.4);
             
             positions.push(x, height, z);
         }
