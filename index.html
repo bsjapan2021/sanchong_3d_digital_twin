@@ -89,6 +89,34 @@
             </div>
         </div>
     </div>
+    <div id="timelapse-control">
+        <div class="timelapse-header">
+            <h3>⏱️ 24시간 타임랩스</h3>
+            <div class="timelapse-buttons">
+                <button id="playTimelapse" class="timelapse-btn">▶️ 재생</button>
+                <button id="pauseTimelapse" class="timelapse-btn">⏸️ 일시정지</button>
+            </div>
+        </div>
+        <div class="timelapse-controls">
+            <label for="timelapseProgress">시간: <span id="timelapseTime">00:00</span></label>
+            <input type="range" id="timelapseProgress" min="0" max="23" step="1" value="0">
+            <div class="timelapse-info">
+                <span class="label">과거 24시간 구름 변화 패턴</span>
+            </div>
+        </div>
+    </div>
+    <div id="cloud3d-control">
+        <h3>☁️ 3D 구름 파티클</h3>
+        <button id="toggleCloud3D" class="toggle-btn">표시 ON/OFF</button>
+    </div>
+    <div id="prediction-panel">
+        <h3>🔮 AI 강수 예측</h3>
+        <div class="prediction-data">
+            <p>6시간 후: <span id="predicted6h">-- mm/h</span></p>
+            <p>신뢰도: <span id="predictionConfidence">--%</span></p>
+            <p>경향: <span id="predictionTrend">--</span></p>
+        </div>
+    </div>
     <div id="loading">모델 로딩 중...</div>
     <script type="module" src="main.js"></script>
 </body>

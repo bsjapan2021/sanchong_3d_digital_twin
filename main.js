@@ -499,6 +499,408 @@ class HeavyRainDetector {
     }
 }
 
+// =====================================
+// 24시간 위성 영상 타임랩스
+// =====================================
+class SatelliteTimelapse {
+    constructor(scene, satelliteOverlay) {
+        this.scene = scene;
+        this.satelliteOverlay = satelliteOverlay;
+        this.isPlaying = false;
+        this.currentIndex = 0;
+        this.images = [];
+        this.totalHours = 24;
+        this.fps = 2; // 초당 2프레임
+        
+        // Mock 24시간 데이터 생성
+        this.generateMock24HourData();
+    }
+    
+    // Mock 24시간 위성 영상 데이터 생성
+    generateMock24HourData() {
+        this.images = [];
+        
+        for (let hour = 0; hour < this.totalHours; hour++) {
+            // 시간대별 구름 패턴 변화 시뮬레이션
+            this.images.push({
+                hour: hour,
+                timestamp: new Date(Date.now() - (24 - hour) * 3600000),
+                cloudDensity: this.getCloudDensityByHour(hour),
+                temperature: this.getTemperatureByHour(hour)
+            });
+        }
+        
+        console.log(`✅ 24시간 타임랩스 데이터 생성 완료 (${this.totalHours}프레임)`);
+    }
+    
+    // 시간대별 구름 밀도 (0-1)
+    getCloudDensityByHour(hour) {
+        // 오후에 구름 증가 패턴
+        if (hour >= 14 && hour <= 18) {
+            return 0.7 + Math.random() * 0.3; // 70-100%
+        } else if (hour >= 9 && hour <= 20) {
+            return 0.4 + Math.random() * 0.3; // 40-70%
+        } else {
+            return 0.2 + Math.random() * 0.2; // 20-40%
+        }
+    }
+    
+    // 시간대별 온도
+    getTemperatureByHour(hour) {
+        // 간단한 사인 곡선 (최저 새벽 6시, 최고 오후 2시)
+        const base = 20;
+        const amplitude = 8;
+        const phase = (hour - 6) * (Math.PI / 12);
+        return base + amplitude * Math.sin(phase);
+    }
+    
+    // Mock 텍스처 생성 (시간대별)
+    generateTimelapseTexture(hour, cloudDensity) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // 시간대별 배경색 (낮/밤)
+        let bgColor;
+        if (hour >= 6 && hour < 18) {
+            // 낮: 밝은 파랑
+            const brightness = 150 + (cloudDensity * 50);
+            bgColor = `rgba(${brightness}, ${brightness + 30}, 255, 0.3)`;
+        } else {
+            // 밤: 어두운 파랑
+            const brightness = 50 + (cloudDensity * 30);
+            bgColor = `rgba(${brightness}, ${brightness}, ${brightness + 50}, 0.3)`;
+        }
+        
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // 구름 패턴 (밀도에 따라)
+        const cloudCount = Math.floor(cloudDensity * 30);
+        for (let i = 0; i < cloudCount; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const radius = Math.random() * 60 + 20;
+            const opacity = cloudDensity * 0.8;
+            
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+            gradient.addColorStop(0, `rgba(255, 255, 255, ${opacity})`);
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // 시간 표시
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText(`${hour}:00`, 20, 40);
+        
+        return new THREE.CanvasTexture(canvas);
+    }
+    
+    // 재생 시작
+    play() {
+        if (this.isPlaying) return;
+        
+        this.isPlaying = true;
+        this.currentIndex = 0;
+        
+        console.log('▶️ 타임랩스 재생 시작');
+        this.playLoop();
+    }
+    
+    // 재생 루프
+    playLoop() {
+        if (!this.isPlaying) return;
+        
+        // 현재 프레임 표시
+        const frame = this.images[this.currentIndex];
+        const texture = this.generateTimelapseTexture(frame.hour, frame.cloudDensity);
+        
+        // 위성 오버레이 텍스처 업데이트
+        if (this.satelliteOverlay.overlayPlane) {
+            this.satelliteOverlay.overlayPlane.material.map = texture;
+            this.satelliteOverlay.overlayPlane.material.needsUpdate = true;
+        }
+        
+        // UI 업데이트
+        this.updateTimelapseUI(frame);
+        
+        // 다음 프레임
+        this.currentIndex++;
+        if (this.currentIndex >= this.images.length) {
+            this.currentIndex = 0; // 루프
+        }
+        
+        // 다음 프레임까지 대기
+        setTimeout(() => this.playLoop(), 1000 / this.fps);
+    }
+    
+    // 일시정지
+    pause() {
+        this.isPlaying = false;
+        console.log('⏸️ 타임랩스 일시정지');
+    }
+    
+    // 특정 시간으로 이동
+    seekToHour(hour) {
+        this.currentIndex = hour % this.totalHours;
+        const frame = this.images[this.currentIndex];
+        const texture = this.generateTimelapseTexture(frame.hour, frame.cloudDensity);
+        
+        if (this.satelliteOverlay.overlayPlane) {
+            this.satelliteOverlay.overlayPlane.material.map = texture;
+            this.satelliteOverlay.overlayPlane.material.needsUpdate = true;
+        }
+        
+        this.updateTimelapseUI(frame);
+    }
+    
+    // UI 업데이트
+    updateTimelapseUI(frame) {
+        const timelapseTime = document.getElementById('timelapseTime');
+        const timelapseProgress = document.getElementById('timelapseProgress');
+        
+        if (timelapseTime) {
+            const timeStr = frame.timestamp.toLocaleTimeString('ko-KR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            timelapseTime.textContent = `${timeStr} (${Math.round(frame.cloudDensity * 100)}% 운량)`;
+        }
+        
+        if (timelapseProgress) {
+            timelapseProgress.value = frame.hour;
+        }
+    }
+}
+
+// =====================================
+// 3D 구름 파티클 시스템
+// =====================================
+class Cloud3DParticles {
+    constructor(scene) {
+        this.scene = scene;
+        this.particleSystem = null;
+        this.particleCount = 5000;
+        this.enabled = false;
+    }
+    
+    // Mock 구름 높이 데이터 생성
+    generateCloudHeightData() {
+        const positions = [];
+        const colors = [];
+        const sizes = [];
+        
+        for (let i = 0; i < this.particleCount; i++) {
+            // 산청군 영역 내 랜덤 위치
+            const x = (Math.random() - 0.5) * 60;
+            const z = (Math.random() - 0.5) * 60;
+            
+            // 구름 높이 (5km ~ 15km)
+            const height = 5 + Math.random() * 10;
+            
+            // 높이에 따른 색상 (낮을수록 어둡게)
+            const brightness = 0.6 + (height / 15) * 0.4;
+            colors.push(brightness, brightness, brightness + 0.1);
+            
+            // 높이에 따른 크기
+            sizes.push(0.2 + (height / 15) * 0.3);
+            
+            positions.push(x, height, z);
+        }
+        
+        return { positions, colors, sizes };
+    }
+    
+    // 3D 파티클 생성
+    create3DCloudParticles() {
+        // 기존 파티클 제거
+        if (this.particleSystem) {
+            this.scene.remove(this.particleSystem);
+            this.particleSystem.geometry.dispose();
+            this.particleSystem.material.dispose();
+        }
+        
+        const data = this.generateCloudHeightData();
+        
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
+        geometry.setAttribute('size', new THREE.Float32BufferAttribute(data.sizes, 1));
+        
+        const material = new THREE.PointsMaterial({
+            size: 0.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.6,
+            sizeAttenuation: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        
+        this.particleSystem = new THREE.Points(geometry, material);
+        this.scene.add(this.particleSystem);
+        
+        this.enabled = true;
+        console.log(`☁️ 3D 구름 파티클 생성 완료 (${this.particleCount}개)`);
+        
+        // 애니메이션
+        this.animateParticles();
+    }
+    
+    // 파티클 애니메이션 (구름 이동)
+    animateParticles() {
+        if (!this.enabled || !this.particleSystem) return;
+        
+        const positions = this.particleSystem.geometry.attributes.position.array;
+        
+        for (let i = 0; i < positions.length; i += 3) {
+            // X축으로 천천히 이동 (바람 효과)
+            positions[i] += 0.01;
+            
+            // 경계 넘어가면 반대편으로
+            if (positions[i] > 30) {
+                positions[i] = -30;
+            }
+            
+            // Y축 살짝 변화 (구름 흔들림)
+            positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+        }
+        
+        this.particleSystem.geometry.attributes.position.needsUpdate = true;
+        
+        requestAnimationFrame(() => this.animateParticles());
+    }
+    
+    // 표시/숨김
+    toggle() {
+        if (!this.particleSystem) {
+            this.create3DCloudParticles();
+        } else {
+            this.particleSystem.visible = !this.particleSystem.visible;
+            this.enabled = this.particleSystem.visible;
+        }
+    }
+    
+    // 파티클 수 조절
+    updateParticleCount(count) {
+        this.particleCount = count;
+        this.create3DCloudParticles();
+    }
+}
+
+// =====================================
+// AI 기반 강수 예측 시스템
+// =====================================
+class RainfallPredictor {
+    constructor() {
+        this.historicalData = [];
+        this.predictionHorizon = 6; // 6시간 후 예측
+        this.model = this.initializeModel();
+    }
+    
+    // 간단한 선형 모델 초기화
+    initializeModel() {
+        // 실제로는 TensorFlow.js 등 사용
+        return {
+            weights: {
+                currentRainfall: 0.6,
+                humidity: 0.2,
+                temperature: 0.1,
+                trend: 0.1
+            }
+        };
+    }
+    
+    // 과거 데이터 추가
+    addHistoricalData(data) {
+        this.historicalData.push({
+            ...data,
+            timestamp: Date.now()
+        });
+        
+        // 최근 24시간만 유지
+        const dayAgo = Date.now() - 24 * 3600000;
+        this.historicalData = this.historicalData.filter(d => d.timestamp > dayAgo);
+    }
+    
+    // 트렌드 계산
+    calculateTrend() {
+        if (this.historicalData.length < 2) return 0;
+        
+        const recent = this.historicalData.slice(-10);
+        let sum = 0;
+        
+        for (let i = 1; i < recent.length; i++) {
+            sum += recent[i].rainfall - recent[i - 1].rainfall;
+        }
+        
+        return sum / (recent.length - 1);
+    }
+    
+    // 강수량 예측
+    predict(currentData) {
+        const trend = this.calculateTrend();
+        
+        // 간단한 선형 예측 모델
+        const prediction = 
+            currentData.rainfall * this.model.weights.currentRainfall +
+            (currentData.humidity / 100) * 30 * this.model.weights.humidity +
+            (30 - currentData.temperature) * this.model.weights.temperature +
+            trend * 5 * this.model.weights.trend;
+        
+        // 0 이상으로 제한
+        const predictedRainfall = Math.max(0, prediction);
+        
+        // 신뢰도 계산 (데이터가 많을수록 높음)
+        const confidence = Math.min(100, this.historicalData.length * 5);
+        
+        return {
+            rainfall6h: Math.round(predictedRainfall * 10) / 10,
+            confidence: Math.round(confidence),
+            trend: trend > 0 ? '증가' : trend < 0 ? '감소' : '유지',
+            level: this.getPredictionLevel(predictedRainfall)
+        };
+    }
+    
+    // 예측 수준 분류
+    getPredictionLevel(rainfall) {
+        if (rainfall >= 50) return 'CRITICAL';
+        if (rainfall >= 30) return 'HIGH';
+        if (rainfall >= 10) return 'MODERATE';
+        return 'LOW';
+    }
+    
+    // UI 업데이트
+    updatePredictionUI(prediction) {
+        const predictionPanel = document.getElementById('rainfallPrediction');
+        const predicted6h = document.getElementById('predicted6h');
+        const predictionConfidence = document.getElementById('predictionConfidence');
+        const predictionTrend = document.getElementById('predictionTrend');
+        
+        if (!predicted6h || !predictionConfidence || !predictionTrend) return;
+        
+        predicted6h.textContent = `${prediction.rainfall6h} mm/h`;
+        predictionConfidence.textContent = `${prediction.confidence}%`;
+        predictionTrend.textContent = prediction.trend;
+        
+        // 레벨에 따른 색상
+        const colors = {
+            'CRITICAL': '#ff4444',
+            'HIGH': '#ff8844',
+            'MODERATE': '#ffcc44',
+            'LOW': '#44ff44'
+        };
+        
+        predicted6h.style.color = colors[prediction.level] || '#ffffff';
+    }
+}
+
 // Scene 설정
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a0a);
@@ -536,6 +938,15 @@ const satelliteOverlay = new SatelliteImageOverlay(scene, weatherAPI.apiKey);
 
 // 호우 감지 시스템 초기화
 const heavyRainDetector = new HeavyRainDetector(scene);
+
+// 타임랩스 시스템 초기화
+const satelliteTimelapse = new SatelliteTimelapse(scene, satelliteOverlay);
+
+// 3D 구름 파티클 초기화
+const cloud3DParticles = new Cloud3DParticles(scene);
+
+// AI 강수 예측 초기화
+const rainfallPredictor = new RainfallPredictor();
 
 // Camera 설정
 const camera = new THREE.PerspectiveCamera(
@@ -937,6 +1348,11 @@ function updateWeatherUI(data) {
     
     // 2단계: 호우 구역 자동 감지
     heavyRainDetector.detectHeavyRain(data.rainfall);
+    
+    // 5단계: AI 강수 예측 데이터 추가 및 예측
+    rainfallPredictor.addHistoricalData(data);
+    const prediction = rainfallPredictor.predict(data);
+    rainfallPredictor.updatePredictionUI(prediction);
 }
 
 // 자동 업데이트 토글 버튼
@@ -994,8 +1410,49 @@ if (satelliteTypeSelect) {
     });
 }
 
+// =====================================
+// 3단계: 타임랩스 UI 연동
+// =====================================
+// 재생 버튼
+const playTimelapseBtn = document.getElementById('playTimelapse');
+if (playTimelapseBtn) {
+    playTimelapseBtn.addEventListener('click', () => {
+        satelliteTimelapse.play();
+    });
+}
+
+// 일시정지 버튼
+const pauseTimelapseBtn = document.getElementById('pauseTimelapse');
+if (pauseTimelapseBtn) {
+    pauseTimelapseBtn.addEventListener('click', () => {
+        satelliteTimelapse.pause();
+    });
+}
+
+// 타임라인 슬라이더
+const timelapseProgress = document.getElementById('timelapseProgress');
+if (timelapseProgress) {
+    timelapseProgress.addEventListener('input', (e) => {
+        satelliteTimelapse.pause(); // 수동 조작 시 재생 멈춤
+        satelliteTimelapse.seekToHour(parseInt(e.target.value));
+    });
+}
+
+// =====================================
+// 4단계: 3D 구름 파티클 UI 연동
+// =====================================
+const toggleCloud3DBtn = document.getElementById('toggleCloud3D');
+if (toggleCloud3DBtn) {
+    toggleCloud3DBtn.addEventListener('click', () => {
+        cloud3DParticles.toggle();
+    });
+}
+
 console.log('🛰️ 실시간 기상 데이터 연동 시작');
 console.log('🛰️ 천리안 위성 영상 오버레이 활성화');
+console.log('⏱️ 24시간 타임랩스 준비 완료');
+console.log('☁️ 3D 구름 파티클 시스템 준비 완료');
+console.log('🔮 AI 강수 예측 시스템 활성화');
 console.log('💡 Mock 데이터 사용 중 (실제 API 사용: weatherAPI.useRealAPI = true)');
 console.log('💡 기상청 API 키 설정: weatherAPI.apiKey = "YOUR_KEY"');
 
