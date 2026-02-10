@@ -473,29 +473,47 @@ class HeavyRainDetector {
         // 위험도 분석
         const level = this.analyzeRainfallRisk(currentRainfall);
         
-        // 강수량이 10mm 이상일 때만 마커 표시
-        if (currentRainfall >= 10) {
-            // Mock 구름 데이터 생성
-            const clouds = this.generateMockCloudData(currentRainfall);
-            
-            // 위험 구역에 마커 표시 (최대 3개로 제한)
-            let markerCount = 0;
-            clouds.forEach(cloud => {
-                if (markerCount < 3 && cloud.height > 12000 && cloud.temperature < -50) {
-                    this.createWarningMarker(
-                        { x: cloud.x, z: cloud.z },
-                        cloud.intensity,
-                        level
-                    );
-                    markerCount++;
-                }
-            });
-            
-            console.log(`🌩️ 호우 감지: ${level} - 경고 마커: ${markerCount}개`);
+        // 구름 색상 업데이트 (와이어프레임 마커 대신)
+        if (window.cloud3DParticles) {
+            window.cloud3DParticles.updateCloudColors(level);
         }
         
-        // UI 업데이트
-        this.updateAlertUI(level, currentRainfall, 0);
+        // UI 카드 업데이트
+        this.updateAlertCard(level, currentRainfall);
+        
+        console.log(`🌩️ 호우 감지: ${level} - 강수량: ${currentRainfall.toFixed(1)}mm/h`);
+    }
+    
+    // 경보 카드 UI 업데이트
+    updateAlertCard(level, rainfall) {
+        const card = document.getElementById('rainfall-alert-card');
+        if (!card) return;
+        
+        const threshold = this.thresholds[level];
+        const levelText = card.querySelector('.alert-level');
+        const valueText = card.querySelector('.alert-value');
+        const messageText = card.querySelector('.alert-message');
+        
+        // 카드 클래스 업데이트
+        card.className = '';
+        card.classList.add(level.toLowerCase());
+        
+        // 텍스트 업데이트
+        levelText.textContent = level;
+        valueText.textContent = `${rainfall.toFixed(1)} mm/h`;
+        
+        let message = '';
+        if (level === 'CRITICAL') {
+            message = '⚠️ 호우경보! 즉시 대피 준비!';
+        } else if (level === 'WARNING') {
+            message = '⚠️ 호우주의보 발효 중';
+        } else if (level === 'WATCH') {
+            message = '⚠️ 기상 상황 주의';
+        } else {
+            message = '✅ 안전';
+        }
+        
+        messageText.textContent = message;
     }
     
     // 경보 UI 업데이트
@@ -954,7 +972,9 @@ class Cloud3DParticles {
             baseY: y, 
             baseZ: z, 
             speed: 0.008 + Math.random() * 0.012,
-            rotationSpeed: (Math.random() - 0.5) * 0.0005
+            rotationSpeed: (Math.random() - 0.5) * 0.0005,
+            targetColor: new THREE.Color(brightness, brightness, brightness + 0.05),
+            currentColor: new THREE.Color(brightness, brightness, brightness + 0.05)
         };
         
         // 전체 구름에 약간의 초기 회전
@@ -965,6 +985,29 @@ class Cloud3DParticles {
         );
         
         return cloudGroup;
+    }
+    
+    // 강수량에 따라 구름 색상 변경
+    updateCloudColors(rainfallLevel) {
+        if (!this.enabled || !this.particleSystem) return;
+        
+        let targetColor;
+        if (rainfallLevel === 'CRITICAL') {
+            targetColor = new THREE.Color(1.0, 0.27, 0.27); // 빨간색
+        } else if (rainfallLevel === 'WARNING') {
+            targetColor = new THREE.Color(1.0, 0.53, 0.27); // 주황색
+        } else if (rainfallLevel === 'WATCH') {
+            targetColor = new THREE.Color(1.0, 1.0, 0.27); // 노란색
+        } else {
+            targetColor = new THREE.Color(0.95, 0.95, 1.0); // 흰색 (안전)
+        }
+        
+        // 모든 구름 클러스터 색상 업데이트
+        this.particleSystem.children.forEach(cloudGroup => {
+            if (cloudGroup.userData) {
+                cloudGroup.userData.targetColor = targetColor.clone();
+            }
+        });
     }
     
     // 파티클 애니메이션 (구름 이동)
@@ -1001,6 +1044,19 @@ class Cloud3DParticles {
             // 각 구체들도 약간씩 펄스 (숨쉬는 효과)
             const pulseScale = 1 + Math.sin(time * 6 + index) * 0.03;
             cloudGroup.scale.set(pulseScale, pulseScale, pulseScale);
+            
+            // 색상 전환 애니메이션 (부드럽게)
+            if (cloudGroup.userData.targetColor && cloudGroup.userData.currentColor) {
+                cloudGroup.userData.currentColor.lerp(cloudGroup.userData.targetColor, 0.02);
+                
+                // 각 구체의 색상 업데이트
+                cloudGroup.children.forEach(sphere => {
+                    if (sphere.material) {
+                        sphere.material.color.copy(cloudGroup.userData.currentColor);
+                        sphere.material.emissive.copy(cloudGroup.userData.currentColor).multiplyScalar(0.3);
+                    }
+                });
+            }
             
             // 그림자 계산용 위치 업데이트
             if (this.cloudPositions[index]) {
@@ -1529,6 +1585,7 @@ const satelliteTimelapse = new SatelliteTimelapse(scene, satelliteOverlay);
 
 // 3D 구름 파티클 초기화
 const cloud3DParticles = new Cloud3DParticles(scene);
+window.cloud3DParticles = cloud3DParticles; // 전역 접근 가능하도록
 
 // AI 강수 예측 초기화
 const rainfallPredictor = new RainfallPredictor();
