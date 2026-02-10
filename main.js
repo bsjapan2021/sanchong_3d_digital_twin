@@ -1806,11 +1806,6 @@ function rainfallToFloodLevel(rainfall) {
     
     return Math.min(100, Math.max(0, floodPercent));
 }
-        rainfall = 350 + ((floodPercent - 70) / 30) * 150;
-    }
-    
-    return Math.round(rainfall);
-}
 
 floodSlider.addEventListener('input', (e) => {
     currentFloodLevel = parseFloat(e.target.value);
