@@ -220,6 +220,9 @@ class SatelliteImageOverlay {
     // 위성 영상 다운로드
     async fetchSatelliteImage(type = 'daynight') {
         try {
+            // 수신 중 상태 표시
+            this.updateStatus('receiving');
+            
             // CORS 이슈로 인해 Mock 데이터 사용
             console.log(`🛰️ 위성 영상 로드 시도: ${type}`);
             
@@ -227,14 +230,47 @@ class SatelliteImageOverlay {
             // const url = `${this.baseUrl}/rgbImg/latest?api_key=${this.apiKey}&area=ko&rgb_type=${type}`;
             // const response = await fetch(url);
             
+            // 수신 시뮬레이션 (1초 딜레이)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
             // Mock 텍스처 생성
             const texture = this.generateMockSatelliteTexture();
             console.log('✅ Mock 위성 영상 생성 완료');
+            
+            // 완료 상태 표시
+            this.updateStatus('complete');
+            
             return texture;
             
         } catch (error) {
             console.warn('위성 영상 로드 실패, Mock 데이터 사용:', error);
+            this.updateStatus('error');
             return this.generateMockSatelliteTexture();
+        }
+    }
+    
+    // 수신 상태 업데이트
+    updateStatus(status) {
+        const statusElement = document.getElementById('satelliteStatus');
+        const statusText = statusElement?.querySelector('.status-text');
+        
+        if (!statusElement || !statusText) return;
+        
+        if (status === 'receiving') {
+            statusElement.classList.add('receiving');
+            statusText.textContent = '영상 수신 중...';
+        } else if (status === 'complete') {
+            statusText.textContent = '수신 완료';
+            setTimeout(() => {
+                statusElement.classList.remove('receiving');
+                statusText.textContent = '대기 중...';
+            }, 2000);
+        } else if (status === 'error') {
+            statusElement.classList.remove('receiving');
+            statusText.textContent = '수신 실패';
+            setTimeout(() => {
+                statusText.textContent = '대기 중...';
+            }, 3000);
         }
     }
     
