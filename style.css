@@ -790,7 +790,7 @@ body {
 /* AI 예측 패널 */
 #prediction-panel {
     position: absolute;
-    bottom: 300px;
+    bottom: 20px;
     left: 20px;
     background: rgba(0, 0, 0, 0.7);
     padding: 20px;
