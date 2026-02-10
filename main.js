@@ -7,16 +7,16 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 // =====================================
 class WeatherAPI {
     constructor() {
-        // 기상청 API 키 (공공데이터포털에서 발급 필요)
-        // 현재는 Mock 데이터 사용
-        this.useRealAPI = false; // true로 변경 시 실제 API 사용
-        this.apiKey = 'YOUR_API_KEY_HERE';
+        // 환경변수에서 API 키 로드 (Vite 사용)
+        // .env 파일에 VITE_WEATHER_API_KEY 설정 필요
+        this.useRealAPI = true; // 실제 API 사용
+        this.apiKey = import.meta.env.VITE_WEATHER_API_KEY || 'api-3532dc9c6e964a018cbfe169c2b16ea6';
         this.updateInterval = 10 * 60 * 1000; // 10분마다 업데이트
         this.autoUpdate = true;
         
         // 산청군 좌표 (기상청 격자)
-        this.nx = 89; // 격자 X
-        this.ny = 90; // 격자 Y
+        this.nx = import.meta.env.VITE_NX || 89; // 격자 X
+        this.ny = import.meta.env.VITE_NY || 90; // 격자 Y
         
         this.currentData = {
             rainfall: 0,      // 1시간 강수량 (mm)
