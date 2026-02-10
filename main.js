@@ -1477,6 +1477,9 @@ loader.load(
         window.floodThreshold = floodThreshold;
         window.baseScale = baseScale;
         window.yScaleMultiplier = yScaleMultiplier;
+        
+        // 초기 침수 영역 표시 (기본값 72%)
+        window.createFloodOverlay(currentFloodLevel);
     },
     (progress) => {
         const percent = (progress.loaded / progress.total * 100).toFixed(0);
@@ -1603,8 +1606,8 @@ floodSlider.addEventListener('input', (e) => {
         floodStatus.style.background = 'rgba(255, 68, 68, 0.2)';
     }
     
-    // 침수 지역이 표시 중이면 실시간 업데이트
-    if (showFloodZone) {
+    // 슬라이더를 움직이면 자동으로 침수 영역 표시
+    if (window.createFloodOverlay) {
         window.createFloodOverlay(currentFloodLevel);
     }
 });
