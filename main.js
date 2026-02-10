@@ -1217,6 +1217,45 @@ class RainfallPredictor {
         };
         
         predicted6h.style.color = colors[prediction.level] || '#ffffff';
+        
+        // AI 예측값을 침수 슬라이더에 표시
+        this.updateFloodSliderPrediction(prediction.rainfall6h);
+    }
+    
+    // 침수 슬라이더에 예측 마커 표시
+    updateFloodSliderPrediction(rainfall) {
+        const floodLevel = rainfallToFloodLevel(rainfall);
+        const floodSlider = document.getElementById('floodSlider');
+        
+        if (!floodSlider) return;
+        
+        // 기존 마커 제거
+        let predictionMarker = document.getElementById('predictionMarker');
+        if (!predictionMarker) {
+            // 마커 생성
+            predictionMarker = document.createElement('div');
+            predictionMarker.id = 'predictionMarker';
+            predictionMarker.className = 'prediction-marker';
+            floodSlider.parentElement.appendChild(predictionMarker);
+            
+            // 툴팁 생성
+            const tooltip = document.createElement('div');
+            tooltip.className = 'prediction-tooltip';
+            predictionMarker.appendChild(tooltip);
+        }
+        
+        // 마커 위치 업데이트
+        const position = floodLevel; // 0-100%
+        predictionMarker.style.left = `${position}%`;
+        
+        // 툴팅 텍스트 업데이트
+        const tooltip = predictionMarker.querySelector('.prediction-tooltip');
+        if (tooltip) {
+            tooltip.textContent = `AI 예측: ${Math.round(floodLevel)}%`;
+        }
+        
+        // 마커 표시
+        predictionMarker.style.display = 'block';
     }
 }
 
@@ -1613,6 +1652,35 @@ function calculateRainfall(floodPercent) {
         rainfall = 200 + ((floodPercent - 50) / 20) * 150;
     } else {
         // 70-100%: 350-500mm
+        rainfall = 350 + ((floodPercent - 70) / 30) * 150;
+    }
+    
+    return Math.round(rainfall);
+}
+
+// 강수량을 침수 레벨로 변환하는 역함수
+function rainfallToFloodLevel(rainfall) {
+    if (rainfall <= 0) return 0;
+    if (rainfall >= 500) return 100;
+    
+    let floodPercent;
+    
+    if (rainfall <= 100) {
+        // 0-100mm: 0-30%
+        floodPercent = (rainfall / 100) * 30;
+    } else if (rainfall <= 200) {
+        // 100-200mm: 30-50%
+        floodPercent = 30 + ((rainfall - 100) / 100) * 20;
+    } else if (rainfall <= 350) {
+        // 200-350mm: 50-70%
+        floodPercent = 50 + ((rainfall - 200) / 150) * 20;
+    } else {
+        // 350-500mm: 70-100%
+        floodPercent = 70 + ((rainfall - 350) / 150) * 30;
+    }
+    
+    return Math.min(100, Math.max(0, floodPercent));
+}
         rainfall = 350 + ((floodPercent - 70) / 30) * 150;
     }
     
