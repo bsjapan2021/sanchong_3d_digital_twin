@@ -126,6 +126,22 @@
             <p>신뢰도: <span id="predictionConfidence">--%</span></p>
             <p>경향: <span id="predictionTrend">--</span></p>
         </div>
+        <div id="aiTrainingStatus" class="ai-training-status">
+            <div class="status-header">
+                <span class="status-icon">🧠</span>
+                <span class="status-text">대기 중</span>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <span class="progress-text">0%</span>
+            </div>
+            <div class="training-info">
+                <span class="data-count">데이터: 0개</span>
+                <span class="model-status">모델 준비중</span>
+            </div>
+        </div>
     </div>
     <div id="loading">모델 로딩 중...</div>
     <script type="module" src="main.js"></script>

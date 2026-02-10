@@ -1034,6 +1034,11 @@ class RainfallPredictor {
             verbose: 0,
             callbacks: {
                 onEpochEnd: (epoch, logs) => {
+                    // 진행률 업데이트 (20% ~ 90%)
+                    const progress = 20 + ((epoch + 1) / 50) * 70;
+                    if (epoch % 5 === 0) {
+                        this.updateTrainingStatus('training', progress, `Epoch ${epoch + 1}/50 - Loss: ${logs.loss.toFixed(4)}`);
+                    }
                     if (epoch % 10 === 0) {
                         console.log(`Epoch ${epoch}: loss = ${logs.loss.toFixed(4)}, mae = ${logs.mae.toFixed(4)}`);
                     }
@@ -1045,6 +1050,60 @@ class RainfallPredictor {
         ys.dispose();
         
         console.log('✅ 모델 학습 완료!');
+        
+        // 완료 상태 표시
+        this.updateTrainingStatus('completed', 100, '초기 학습 완료!');
+        this.isModelReady = true;
+        
+        // 2초 후 대기 상태로
+        setTimeout(() => {
+            this.updateTrainingStatus('idle', 0, '모델 준비 완료');
+        }, 2000);
+    }
+    
+    // 학습 상태 UI 업데이트
+    updateTrainingStatus(status, progress, message) {
+        const statusElement = document.getElementById('aiTrainingStatus');
+        const statusText = statusElement?.querySelector('.status-text');
+        const progressFill = statusElement?.querySelector('.progress-fill');
+        const progressText = statusElement?.querySelector('.progress-text');
+        const dataCount = statusElement?.querySelector('.data-count');
+        const modelStatus = statusElement?.querySelector('.model-status');
+        
+        if (!statusElement) return;
+        
+        // 클래스 업데이트
+        statusElement.classList.remove('training', 'completed', 'idle');
+        statusElement.classList.add(status);
+        
+        // 텍스트 업데이트
+        if (statusText) {
+            if (status === 'training') {
+                statusText.textContent = '학습 중...';
+            } else if (status === 'completed') {
+                statusText.textContent = '학습 완료!';
+            } else {
+                statusText.textContent = '대기 중';
+            }
+        }
+        
+        // 진행률 업데이트
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${Math.round(progress)}%`;
+        }
+        
+        // 데이터 카운트 업데이트
+        if (dataCount) {
+            dataCount.textContent = `데이터: ${this.historicalData.length}개`;
+        }
+        
+        // 모델 상태 업데이트
+        if (modelStatus) {
+            modelStatus.textContent = message;
+        }
     }
     
     // 과거 데이터 추가
@@ -1072,6 +1131,9 @@ class RainfallPredictor {
         
         console.log('🔄 실제 데이터로 모델 재학습 중...');
         
+        // 학습 시작 상태 표시
+        this.updateTrainingStatus('training', 0, `데이터 준비 중... (${this.historicalData.length}개)`);
+        
         const trainingData = [];
         const trainingLabels = [];
         
@@ -1092,19 +1154,82 @@ class RainfallPredictor {
             trainingLabels.push([futureData.rainfall / 100]);
         }
         
+        this.updateTrainingStatus('training', 20, `학습 시작... (10 epochs)`);
+        
         const xs = tf.tensor3d(trainingData);
         const ys = tf.tensor2d(trainingLabels);
         
+        // 진행률을 보여주기 위한 콜백 추가
+        const totalEpochs = 10;
         await this.model.fit(xs, ys, {
-            epochs: 10,
+            epochs: totalEpochs,
             batchSize: 8,
-            verbose: 0
+            verbose: 0,
+            callbacks: {
+                onEpochEnd: (epoch, logs) => {
+                    const progress = 20 + ((epoch + 1) / totalEpochs) * 60;
+                    this.updateTrainingStatus('training', progress, `Epoch ${epoch + 1}/${totalEpochs} - Loss: ${logs.loss.toFixed(4)}`);
+                }
+            }
         });
         
         xs.dispose();
         ys.dispose();
         
         console.log('✅ 재학습 완료');
+        
+        // 완료 상태 표시
+        this.updateTrainingStatus('completed', 100, `모델 업데이트 완료!`);
+        
+        // 3초 후 대기 상태로 복귀
+        setTimeout(() => {
+            this.updateTrainingStatus('idle', 0, `대기 중`);
+        }, 3000);
+    }
+    
+    // 학습 상태 UI 업데이트
+    updateTrainingStatus(status, progress, message) {
+        const statusElement = document.getElementById('aiTrainingStatus');
+        const statusText = statusElement?.querySelector('.status-text');
+        const progressFill = statusElement?.querySelector('.progress-fill');
+        const progressText = statusElement?.querySelector('.progress-text');
+        const dataCount = statusElement?.querySelector('.data-count');
+        const modelStatus = statusElement?.querySelector('.model-status');
+        
+        if (!statusElement) return;
+        
+        // 클래스 업데이트
+        statusElement.classList.remove('training', 'completed', 'idle');
+        statusElement.classList.add(status);
+        
+        // 텍스트 업데이트
+        if (statusText) {
+            if (status === 'training') {
+                statusText.textContent = '학습 중...';
+            } else if (status === 'completed') {
+                statusText.textContent = '학습 완료!';
+            } else {
+                statusText.textContent = '대기 중';
+            }
+        }
+        
+        // 진행률 업데이트
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${Math.round(progress)}%`;
+        }
+        
+        // 데이터 카운트 업데이트
+        if (dataCount) {
+            dataCount.textContent = `데이터: ${this.historicalData.length}개`;
+        }
+        
+        // 모델 상태 업데이트
+        if (modelStatus) {
+            modelStatus.textContent = message;
+        }
     }
     
     // 트렌드 계산
