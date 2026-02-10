@@ -473,24 +473,29 @@ class HeavyRainDetector {
         // 위험도 분석
         const level = this.analyzeRainfallRisk(currentRainfall);
         
-        // Mock 구름 데이터 생성
-        const clouds = this.generateMockCloudData(currentRainfall);
-        
-        // 위험 구역에 마커 표시
-        clouds.forEach(cloud => {
-            if (cloud.height > 12000 || cloud.temperature < -50) {
-                this.createWarningMarker(
-                    { x: cloud.x, z: cloud.z },
-                    cloud.intensity,
-                    level
-                );
-            }
-        });
+        // 강수량이 10mm 이상일 때만 마커 표시
+        if (currentRainfall >= 10) {
+            // Mock 구름 데이터 생성
+            const clouds = this.generateMockCloudData(currentRainfall);
+            
+            // 위험 구역에 마커 표시 (최대 3개로 제한)
+            let markerCount = 0;
+            clouds.forEach(cloud => {
+                if (markerCount < 3 && cloud.height > 12000 && cloud.temperature < -50) {
+                    this.createWarningMarker(
+                        { x: cloud.x, z: cloud.z },
+                        cloud.intensity,
+                        level
+                    );
+                    markerCount++;
+                }
+            });
+            
+            console.log(`🌩️ 호우 감지: ${level} - 경고 마커: ${markerCount}개`);
+        }
         
         // UI 업데이트
-        this.updateAlertUI(level, currentRainfall, clouds.length);
-        
-        console.log(`🌩️ 호우 감지: ${level} - 감지된 대류운: ${clouds.length}개`);
+        this.updateAlertUI(level, currentRainfall, 0);
     }
     
     // 경보 UI 업데이트
@@ -508,16 +513,16 @@ class HeavyRainDetector {
         
         let message = '';
         if (level === 'CRITICAL') {
-            message = `⚠️ 호우경보! 현재 강수량 ${rainfall}mm/h. 즉시 대피 준비!`;
+            message = `⚠️ 호우경보! 현재 강수량 ${rainfall.toFixed(1)}mm/h. 즉시 대피 준비!`;
         } else if (level === 'WARNING') {
-            message = `⚠️ 호우주의보. 강수량 ${rainfall}mm/h. 침수 위험 지역 주의!`;
+            message = `⚠️ 호우주의보. 강수량 ${rainfall.toFixed(1)}mm/h. 침수 위험 지역 주의!`;
         } else if (level === 'WATCH') {
-            message = `⚠️ 주의. 강수량 ${rainfall}mm/h. 기상 변화 모니터링 중.`;
+            message = `⚠️ 주의. 강수량 ${rainfall.toFixed(1)}mm/h. 기상 변화 모니터링 중.`;
         } else {
-            message = `✅ 안전. 현재 강수량 ${rainfall}mm/h.`;
+            message = `✅ 안전. 현재 강수량 ${rainfall.toFixed(1)}mm/h.`;
         }
         
-        alertDetails.textContent = `${message} | 감지된 대류운: ${cloudCount}개`;
+        alertDetails.textContent = message;
         
         // 경보 패널 표시
         if (level !== 'SAFE') {
