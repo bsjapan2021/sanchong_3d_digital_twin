@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import * as tf from '@tensorflow/tfjs';
 
 // =====================================
 // 기상청 API 연동 클래스
@@ -796,38 +797,182 @@ class Cloud3DParticles {
 }
 
 // =====================================
-// AI 기반 강수 예측 시스템
+// AI 기반 강수 예측 시스템 (LSTM)
 // =====================================
 class RainfallPredictor {
     constructor() {
         this.historicalData = [];
         this.predictionHorizon = 6; // 6시간 후 예측
-        this.model = this.initializeModel();
+        this.model = null;
+        this.isModelReady = false;
+        this.sequenceLength = 10; // 과거 10개 데이터 포인트 사용
+        
+        // LSTM 모델 초기화
+        this.initializeLSTMModel();
     }
     
-    // 간단한 선형 모델 초기화
-    initializeModel() {
-        // 실제로는 TensorFlow.js 등 사용
-        return {
-            weights: {
-                currentRainfall: 0.6,
-                humidity: 0.2,
-                temperature: 0.1,
-                trend: 0.1
+    // LSTM 모델 생성
+    async initializeLSTMModel() {
+        console.log('🤖 LSTM 모델 초기화 중...');
+        
+        // Sequential 모델 생성
+        this.model = tf.sequential({
+            layers: [
+                // LSTM 레이어 1 (입력: [시퀀스 길이, 특성 수])
+                tf.layers.lstm({
+                    units: 32,
+                    returnSequences: true,
+                    inputShape: [this.sequenceLength, 3] // 3 특성: 강수량, 습도, 기온
+                }),
+                tf.layers.dropout({ rate: 0.2 }),
+                
+                // LSTM 레이어 2
+                tf.layers.lstm({
+                    units: 16,
+                    returnSequences: false
+                }),
+                tf.layers.dropout({ rate: 0.2 }),
+                
+                // Dense 레이어
+                tf.layers.dense({ units: 8, activation: 'relu' }),
+                tf.layers.dense({ units: 1, activation: 'relu' }) // 출력: 강수량 예측
+            ]
+        });
+        
+        // 모델 컴파일
+        this.model.compile({
+            optimizer: tf.train.adam(0.001),
+            loss: 'meanSquaredError',
+            metrics: ['mae']
+        });
+        
+        console.log('✅ LSTM 모델 초기화 완료');
+        console.log('📊 모델 구조:');
+        this.model.summary();
+        
+        // Mock 데이터로 사전 학습
+        await this.preTrainWithMockData();
+        
+        this.isModelReady = true;
+    }
+    
+    // Mock 데이터로 사전 학습
+    async preTrainWithMockData() {
+        console.log('📚 Mock 데이터로 모델 학습 시작...');
+        
+        // 100개의 시뮬레이션 데이터 생성
+        const trainingData = [];
+        const trainingLabels = [];
+        
+        for (let i = 0; i < 100; i++) {
+            const sequence = [];
+            let baseRainfall = Math.random() * 30;
+            
+            // 10개 시퀀스 생성
+            for (let j = 0; j < this.sequenceLength; j++) {
+                const rainfall = baseRainfall + (Math.random() - 0.5) * 10;
+                const humidity = 60 + Math.random() * 30;
+                const temperature = 20 + Math.random() * 10;
+                
+                sequence.push([
+                    rainfall / 100,        // 정규화 (0-1)
+                    humidity / 100,        // 정규화 (0-1)
+                    temperature / 40       // 정규화 (0-1)
+                ]);
+                
+                baseRainfall += (Math.random() - 0.5) * 5; // 트렌드
             }
-        };
+            
+            // 레이블: 6시간 후 강수량 (트렌드 반영)
+            const futureRainfall = (baseRainfall + (Math.random() - 0.3) * 15) / 100;
+            
+            trainingData.push(sequence);
+            trainingLabels.push([Math.max(0, futureRainfall)]);
+        }
+        
+        const xs = tf.tensor3d(trainingData);
+        const ys = tf.tensor2d(trainingLabels);
+        
+        // 모델 학습
+        await this.model.fit(xs, ys, {
+            epochs: 50,
+            batchSize: 16,
+            validationSplit: 0.2,
+            shuffle: true,
+            verbose: 0,
+            callbacks: {
+                onEpochEnd: (epoch, logs) => {
+                    if (epoch % 10 === 0) {
+                        console.log(`Epoch ${epoch}: loss = ${logs.loss.toFixed(4)}, mae = ${logs.mae.toFixed(4)}`);
+                    }
+                }
+            }
+        });
+        
+        xs.dispose();
+        ys.dispose();
+        
+        console.log('✅ 모델 학습 완료!');
     }
     
     // 과거 데이터 추가
     addHistoricalData(data) {
         this.historicalData.push({
-            ...data,
+            rainfall: data.rainfall,
+            humidity: data.humidity,
+            temperature: data.temperature,
             timestamp: Date.now()
         });
         
         // 최근 24시간만 유지
         const dayAgo = Date.now() - 24 * 3600000;
         this.historicalData = this.historicalData.filter(d => d.timestamp > dayAgo);
+        
+        // 데이터가 충분하면 재학습 (선택적)
+        if (this.historicalData.length >= 50 && this.historicalData.length % 20 === 0) {
+            this.retrainModel();
+        }
+    }
+    
+    // 실제 데이터로 재학습
+    async retrainModel() {
+        if (this.historicalData.length < this.sequenceLength + 1) return;
+        
+        console.log('🔄 실제 데이터로 모델 재학습 중...');
+        
+        const trainingData = [];
+        const trainingLabels = [];
+        
+        for (let i = 0; i <= this.historicalData.length - this.sequenceLength - 1; i++) {
+            const sequence = [];
+            
+            for (let j = 0; j < this.sequenceLength; j++) {
+                const d = this.historicalData[i + j];
+                sequence.push([
+                    d.rainfall / 100,
+                    d.humidity / 100,
+                    d.temperature / 40
+                ]);
+            }
+            
+            const futureData = this.historicalData[i + this.sequenceLength];
+            trainingData.push(sequence);
+            trainingLabels.push([futureData.rainfall / 100]);
+        }
+        
+        const xs = tf.tensor3d(trainingData);
+        const ys = tf.tensor2d(trainingLabels);
+        
+        await this.model.fit(xs, ys, {
+            epochs: 10,
+            batchSize: 8,
+            verbose: 0
+        });
+        
+        xs.dispose();
+        ys.dispose();
+        
+        console.log('✅ 재학습 완료');
     }
     
     // 트렌드 계산
@@ -844,28 +989,70 @@ class RainfallPredictor {
         return sum / (recent.length - 1);
     }
     
-    // 강수량 예측
-    predict(currentData) {
+    // LSTM 강수량 예측
+    async predict(currentData) {
+        if (!this.isModelReady) {
+            return this.fallbackPredict(currentData);
+        }
+        
+        // 시퀀스 데이터 준비
+        let sequence = [];
+        
+        if (this.historicalData.length >= this.sequenceLength) {
+            // 실제 과거 데이터 사용
+            const recentData = this.historicalData.slice(-this.sequenceLength);
+            sequence = recentData.map(d => [
+                d.rainfall / 100,
+                d.humidity / 100,
+                d.temperature / 40
+            ]);
+        } else {
+            // 데이터 부족 시 현재 데이터로 패딩
+            for (let i = 0; i < this.sequenceLength; i++) {
+                sequence.push([
+                    currentData.rainfall / 100,
+                    currentData.humidity / 100,
+                    currentData.temperature / 40
+                ]);
+            }
+        }
+        
+        // TensorFlow 예측
+        const inputTensor = tf.tensor3d([sequence]);
+        const prediction = this.model.predict(inputTensor);
+        const predictedValue = (await prediction.data())[0] * 100; // 역정규화
+        
+        inputTensor.dispose();
+        prediction.dispose();
+        
         const trend = this.calculateTrend();
-        
-        // 간단한 선형 예측 모델
-        const prediction = 
-            currentData.rainfall * this.model.weights.currentRainfall +
-            (currentData.humidity / 100) * 30 * this.model.weights.humidity +
-            (30 - currentData.temperature) * this.model.weights.temperature +
-            trend * 5 * this.model.weights.trend;
-        
-        // 0 이상으로 제한
-        const predictedRainfall = Math.max(0, prediction);
-        
-        // 신뢰도 계산 (데이터가 많을수록 높음)
-        const confidence = Math.min(100, this.historicalData.length * 5);
+        const confidence = Math.min(100, this.historicalData.length * 3);
         
         return {
-            rainfall6h: Math.round(predictedRainfall * 10) / 10,
+            rainfall6h: Math.round(Math.max(0, predictedValue) * 10) / 10,
             confidence: Math.round(confidence),
             trend: trend > 0 ? '증가' : trend < 0 ? '감소' : '유지',
-            level: this.getPredictionLevel(predictedRainfall)
+            level: this.getPredictionLevel(predictedValue),
+            modelType: 'LSTM'
+        };
+    }
+    
+    // Fallback 예측 (모델 준비 전)
+    fallbackPredict(currentData) {
+        const trend = this.calculateTrend();
+        
+        const prediction = 
+            currentData.rainfall * 0.6 +
+            (currentData.humidity / 100) * 30 * 0.2 +
+            (30 - currentData.temperature) * 0.1 +
+            trend * 5 * 0.1;
+        
+        return {
+            rainfall6h: Math.round(Math.max(0, prediction) * 10) / 10,
+            confidence: Math.min(100, this.historicalData.length * 5),
+            trend: trend > 0 ? '증가' : trend < 0 ? '감소' : '유지',
+            level: this.getPredictionLevel(prediction),
+            modelType: 'Linear (Loading...)'
         };
     }
     
@@ -879,7 +1066,6 @@ class RainfallPredictor {
     
     // UI 업데이트
     updatePredictionUI(prediction) {
-        const predictionPanel = document.getElementById('rainfallPrediction');
         const predicted6h = document.getElementById('predicted6h');
         const predictionConfidence = document.getElementById('predictionConfidence');
         const predictionTrend = document.getElementById('predictionTrend');
@@ -888,7 +1074,7 @@ class RainfallPredictor {
         
         predicted6h.textContent = `${prediction.rainfall6h} mm/h`;
         predictionConfidence.textContent = `${prediction.confidence}%`;
-        predictionTrend.textContent = prediction.trend;
+        predictionTrend.textContent = `${prediction.trend} (${prediction.modelType || 'LSTM'})`;
         
         // 레벨에 따른 색상
         const colors = {
