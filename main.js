@@ -823,18 +823,18 @@ class Cloud3DParticles {
             const x = (Math.random() - 0.5) * 20;
             const z = (Math.random() - 0.5) * 20;
             
-            // 구름 높이 (모델 바로 위 1~3 높이)
-            const height = 1 + Math.random() * 2;
+            // 구름 높이 (모델 위쪽 5~15 높이)
+            const height = 5 + Math.random() * 10;
             
             // 그림자 계산용 위치 저장
             this.cloudPositions.push({ x, y: height, z });
             
             // 높이에 따른 색상 (낮을수록 어둡게)
-            const brightness = 0.7 + (height / 3) * 0.3;
+            const brightness = 0.7 + (height / 15) * 0.3;
             colors.push(brightness, brightness, brightness + 0.1);
             
             // 높이에 따른 크기
-            sizes.push(0.4 + (height / 3) * 0.3);
+            sizes.push(0.4 + (height / 15) * 0.3);
             
             positions.push(x, height, z);
         }
@@ -1997,3 +1997,171 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 });
+
+// =====================================
+// 드래그 앤 드롭으로 UI 카드 위치 이동
+// =====================================
+class DraggableUI {
+    constructor() {
+        this.draggableElements = [
+            '#info',
+            '#flood-control',
+            '#weather-control',
+            '#satellite-control',
+            '#heavy-rain-alert',
+            '#timelapse-control',
+            '#cloud3d-control',
+            '#prediction-panel',
+            '#time-control'
+        ];
+        
+        this.draggedElement = null;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        
+        this.init();
+    }
+    
+    init() {
+        // 저장된 위치 복원
+        this.restorePositions();
+        
+        // 각 카드를 드래그 가능하게 만들기
+        this.draggableElements.forEach(selector => {
+            const element = document.querySelector(selector);
+            if (!element) return;
+            
+            // 드래그 핸들 추가 (헤더 부분)
+            this.makeDraggable(element);
+        });
+    }
+    
+    makeDraggable(element) {
+        // 커서 스타일 추가
+        element.style.cursor = 'move';
+        
+        // 마우스 다운 이벤트
+        element.addEventListener('mousedown', (e) => {
+            // 버튼이나 input 클릭 시 드래그 방지
+            if (e.target.tagName === 'BUTTON' || 
+                e.target.tagName === 'INPUT' || 
+                e.target.tagName === 'SELECT') {
+                return;
+            }
+            
+            this.startDrag(element, e);
+        });
+    }
+    
+    startDrag(element, e) {
+        this.draggedElement = element;
+        
+        // 현재 위치 계산
+        const rect = element.getBoundingClientRect();
+        this.offsetX = e.clientX - rect.left;
+        this.offsetY = e.clientY - rect.top;
+        
+        // 드래그 중 스타일
+        element.style.opacity = '0.8';
+        element.style.zIndex = '9999';
+        
+        // 이벤트 리스너 추가
+        document.addEventListener('mousemove', this.drag);
+        document.addEventListener('mouseup', this.stopDrag);
+    }
+    
+    drag = (e) => {
+        if (!this.draggedElement) return;
+        
+        // 새 위치 계산
+        let newX = e.clientX - this.offsetX;
+        let newY = e.clientY - this.offsetY;
+        
+        // 화면 경계 체크
+        const maxX = window.innerWidth - this.draggedElement.offsetWidth;
+        const maxY = window.innerHeight - this.draggedElement.offsetHeight;
+        
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+        
+        // 위치 설정
+        this.draggedElement.style.setProperty('position', 'absolute', 'important');
+        this.draggedElement.style.setProperty('left', newX + 'px', 'important');
+        this.draggedElement.style.setProperty('top', newY + 'px', 'important');
+        this.draggedElement.style.setProperty('right', 'auto', 'important');
+        this.draggedElement.style.setProperty('bottom', 'auto', 'important');
+    }
+    
+    stopDrag = () => {
+        if (!this.draggedElement) return;
+        
+        // 드래그 종료 스타일
+        this.draggedElement.style.opacity = '1';
+        this.draggedElement.style.zIndex = '';
+        
+        // 위치 저장
+        this.savePosition(this.draggedElement);
+        
+        // 이벤트 리스너 제거
+        document.removeEventListener('mousemove', this.drag);
+        document.removeEventListener('mouseup', this.stopDrag);
+        
+        this.draggedElement = null;
+    }
+    
+    savePosition(element) {
+        const id = element.id;
+        const position = {
+            left: element.style.left,
+            top: element.style.top
+        };
+        
+        localStorage.setItem(`ui-position-${id}`, JSON.stringify(position));
+    }
+    
+    restorePositions() {
+        this.draggableElements.forEach(selector => {
+            const element = document.querySelector(selector);
+            if (!element) return;
+            
+            const id = element.id;
+            const savedPosition = localStorage.getItem(`ui-position-${id}`);
+            
+            if (savedPosition) {
+                const position = JSON.parse(savedPosition);
+                element.style.setProperty('position', 'absolute', 'important');
+                element.style.setProperty('left', position.left, 'important');
+                element.style.setProperty('top', position.top, 'important');
+                element.style.setProperty('right', 'auto', 'important');
+                element.style.setProperty('bottom', 'auto', 'important');
+            }
+        });
+    }
+    
+    // 위치 초기화
+    resetPositions() {
+        this.draggableElements.forEach(selector => {
+            const element = document.querySelector(selector);
+            if (!element) return;
+            
+            const id = element.id;
+            localStorage.removeItem(`ui-position-${id}`);
+            element.style.position = '';
+            element.style.left = '';
+            element.style.top = '';
+            element.style.right = '';
+            element.style.bottom = '';
+        });
+        
+        location.reload();
+    }
+}
+
+// 드래그 가능한 UI 초기화
+const draggableUI = new DraggableUI();
+
+// 위치 초기화 함수를 전역으로 노출
+window.resetUIPositions = () => draggableUI.resetPositions();
+
+console.log('💡 UI 카드를 드래그하여 원하는 위치로 이동할 수 있습니다');
+console.log('💡 위치 초기화: 콘솔에서 resetUIPositions() 실행');
