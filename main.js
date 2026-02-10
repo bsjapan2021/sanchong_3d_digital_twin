@@ -852,66 +852,163 @@ class Cloud3DParticles {
         // 기존 파티클 제거
         if (this.particleSystem) {
             this.scene.remove(this.particleSystem);
-            this.particleSystem.geometry.dispose();
-            this.particleSystem.material.dispose();
+            if (this.particleSystem.children) {
+                this.particleSystem.children.forEach(cloud => {
+                    cloud.children.forEach(sphere => {
+                        sphere.geometry.dispose();
+                        sphere.material.dispose();
+                    });
+                });
+            }
         }
         
+        // 구름 그룹 생성
+        this.particleSystem = new THREE.Group();
+        
         const data = this.generateCloudHeightData();
+        const cloudCount = Math.min(30, Math.floor(this.particleCount / 100)); // 30개의 뭉게구름으로 증가
         
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.positions, 3));
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(data.colors, 3));
-        geometry.setAttribute('size', new THREE.Float32BufferAttribute(data.sizes, 1));
+        for (let i = 0; i < cloudCount; i++) {
+            const idx = i * 3;
+            const x = data.positions[idx];
+            const y = data.positions[idx + 1];
+            const z = data.positions[idx + 2];
+            const brightness = data.colors[idx];
+            
+            // 각 구름을 5-8개의 구체 클러스터로 생성
+            const cloud = this.createCloudCluster(x, y, z, brightness);
+            this.particleSystem.add(cloud);
+        }
         
-        const material = new THREE.PointsMaterial({
-            size: 0.5,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.6,
-            sizeAttenuation: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
-        
-        this.particleSystem = new THREE.Points(geometry, material);
         this.scene.add(this.particleSystem);
-        
         this.enabled = true;
-        console.log(`☁️ 3D 구름 파티클 생성 완료 (${this.particleCount}개)`);
+        console.log(`☁️ 3D 구름 생성 완료 (${cloudCount}개의 뭉게구름)`);
         
         // 애니메이션
         this.animateParticles();
+    }
+    
+    // 뭉게구름 클러스터 생성
+    createCloudCluster(x, y, z, brightness) {
+        const cloudGroup = new THREE.Group();
+        const sphereCount = 12 + Math.floor(Math.random() * 8); // 12-20개의 구체로 볼륨감 증가
+        
+        // 구름 중심부는 더 밀집되게
+        for (let i = 0; i < sphereCount; i++) {
+            // 구체 크기 (중심부는 크게, 가장자리는 작게)
+            const distanceFromCenter = i / sphereCount;
+            const radius = (0.5 + Math.random() * 0.7) * (1 - distanceFromCenter * 0.5);
+            
+            // 클러스터 내 위치 (3D 가우시안 분포로 자연스럽게)
+            const angle1 = Math.random() * Math.PI * 2;
+            const angle2 = Math.random() * Math.PI;
+            const distance = Math.pow(Math.random(), 0.7) * 2; // 중심부에 더 밀집
+            
+            const offsetX = Math.sin(angle2) * Math.cos(angle1) * distance;
+            const offsetY = (Math.random() - 0.3) * 1.2; // 수직 방향은 덜 퍼짐
+            const offsetZ = Math.sin(angle2) * Math.sin(angle1) * distance;
+            
+            // 구체 지오메트리 (약간 더 디테일)
+            const geometry = new THREE.SphereGeometry(radius, 10, 8);
+            
+            // 구름 재질 (PBR 재질로 더 사실적)
+            const opacity = 0.4 + Math.random() * 0.3; // 불규칙한 투명도
+            const material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(
+                    brightness * 0.95, 
+                    brightness * 0.95, 
+                    brightness + 0.05
+                ),
+                transparent: true,
+                opacity: opacity,
+                roughness: 0.9, // 부드러운 표면
+                metalness: 0.0, // 금속성 없음
+                emissive: new THREE.Color(
+                    brightness * 0.15, 
+                    brightness * 0.15, 
+                    brightness * 0.2
+                ),
+                emissiveIntensity: 0.3,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                fog: true
+            });
+            
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(offsetX, offsetY, offsetZ);
+            
+            // 각 구체마다 약간 다른 스케일 (불규칙성)
+            const scaleVariation = 0.8 + Math.random() * 0.4;
+            sphere.scale.set(
+                scaleVariation,
+                scaleVariation * (0.8 + Math.random() * 0.4), // Y축은 약간 납작
+                scaleVariation
+            );
+            
+            cloudGroup.add(sphere);
+        }
+        
+        cloudGroup.position.set(x, y, z);
+        cloudGroup.userData = { 
+            baseX: x, 
+            baseY: y, 
+            baseZ: z, 
+            speed: 0.008 + Math.random() * 0.012,
+            rotationSpeed: (Math.random() - 0.5) * 0.0005
+        };
+        
+        // 전체 구름에 약간의 초기 회전
+        cloudGroup.rotation.set(
+            Math.random() * 0.3,
+            Math.random() * Math.PI * 2,
+            Math.random() * 0.3
+        );
+        
+        return cloudGroup;
     }
     
     // 파티클 애니메이션 (구름 이동)
     animateParticles() {
         if (!this.enabled || !this.particleSystem) return;
         
-        const positions = this.particleSystem.geometry.attributes.position.array;
+        const time = Date.now() * 0.0001;
         
-        for (let i = 0; i < positions.length; i += 3) {
-            const cloudIndex = i / 3;
+        // 각 구름 클러스터 애니메이션
+        this.particleSystem.children.forEach((cloudGroup, index) => {
+            if (!cloudGroup.userData) return;
             
             // X축으로 천천히 이동 (바람 효과)
-            positions[i] += 0.01;
+            cloudGroup.position.x += cloudGroup.userData.speed;
             
             // 경계 넘어가면 반대편으로
-            if (positions[i] > 10) {
-                positions[i] = -10;
+            if (cloudGroup.position.x > 10) {
+                cloudGroup.position.x = -10;
             }
             
-            // Y축 살짝 변화 (구름 흔들림)
-            positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+            // Y축 살짝 변화 (구름 흔들림 - 더 자연스럽게)
+            cloudGroup.position.y = cloudGroup.userData.baseY + 
+                Math.sin(time * 5 + index * 0.5) * 0.2 +
+                Math.sin(time * 3 + index * 0.3) * 0.15;
             
-            // 그림자 계산용 위치도 업데이트
-            if (this.cloudPositions[cloudIndex]) {
-                this.cloudPositions[cloudIndex].x = positions[i];
-                this.cloudPositions[cloudIndex].y = positions[i + 1];
-                this.cloudPositions[cloudIndex].z = positions[i + 2];
+            // Z축도 약간 움직임
+            cloudGroup.position.z = cloudGroup.userData.baseZ +
+                Math.cos(time * 4 + index * 0.4) * 0.1;
+            
+            // 구름 회전 (천천히, 여러 축)
+            cloudGroup.rotation.y += cloudGroup.userData.rotationSpeed;
+            cloudGroup.rotation.x = Math.sin(time * 2 + index) * 0.05;
+            
+            // 각 구체들도 약간씩 펄스 (숨쉬는 효과)
+            const pulseScale = 1 + Math.sin(time * 6 + index) * 0.03;
+            cloudGroup.scale.set(pulseScale, pulseScale, pulseScale);
+            
+            // 그림자 계산용 위치 업데이트
+            if (this.cloudPositions[index]) {
+                this.cloudPositions[index].x = cloudGroup.position.x;
+                this.cloudPositions[index].y = cloudGroup.position.y;
+                this.cloudPositions[index].z = cloudGroup.position.z;
             }
-        }
-        
-        this.particleSystem.geometry.attributes.position.needsUpdate = true;
+        });
         
         requestAnimationFrame(() => this.animateParticles());
     }
@@ -1487,6 +1584,31 @@ scene.add(directionalLight);
 const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
 scene.add(hemisphereLight);
 
+// 시각적 태양 객체 생성
+const sunGeometry = new THREE.SphereGeometry(1.5, 32, 32);
+const sunMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffff00,
+    emissive: 0xffaa00,
+    emissiveIntensity: 1
+});
+const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+scene.add(sunMesh);
+
+// 태양 후광 효과 (Glow)
+const glowGeometry = new THREE.SphereGeometry(2.5, 32, 32);
+const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffdd88,
+    transparent: true,
+    opacity: 0.3,
+    side: THREE.BackSide
+});
+const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+sunMesh.add(glowMesh);
+
+// 태양 광선 효과 (PointLight)
+const sunPointLight = new THREE.PointLight(0xffeeaa, 0.5, 50);
+sunMesh.add(sunPointLight);
+
 // 시간대별 조명 설정
 let currentTime = 12;
 
@@ -1503,7 +1625,10 @@ function updateSunPosition(hour) {
     
     directionalLight.position.set(sunX, sunY, sunZ);
     
-    let intensity, lightColor;
+    // 시각적 태양 메시 위치 업데이트
+    sunMesh.position.set(sunX, sunY, sunZ);
+    
+    let intensity, lightColor, sunColor, sunEmissive;
     
     if (hour >= 5 && hour < 7) {
         const t = (hour - 5) / 2;
@@ -1513,9 +1638,25 @@ function updateSunPosition(hour) {
             new THREE.Color(0xffffff),
             t
         );
+        // 일출 - 주황빛 태양
+        sunColor = new THREE.Color().lerpColors(
+            new THREE.Color(0xff4500),
+            new THREE.Color(0xffff00),
+            t
+        );
+        sunEmissive = new THREE.Color().lerpColors(
+            new THREE.Color(0xff6b35),
+            new THREE.Color(0xffaa00),
+            t
+        );
+        sunMesh.visible = elevation > -0.2; // 지평선 아래면 숨김
     } else if (hour >= 7 && hour < 17) {
         intensity = 1.2;
         lightColor = new THREE.Color(0xffffff);
+        // 한낮 - 밝은 노란빛
+        sunColor = new THREE.Color(0xffff00);
+        sunEmissive = new THREE.Color(0xffaa00);
+        sunMesh.visible = true;
     } else if (hour >= 17 && hour < 19) {
         const t = (hour - 17) / 2;
         intensity = 0.8 - t * 0.5;
@@ -1524,15 +1665,41 @@ function updateSunPosition(hour) {
             new THREE.Color(0xff6b35),
             t
         );
+        // 일몰 - 붉은빛 태양
+        sunColor = new THREE.Color().lerpColors(
+            new THREE.Color(0xffff00),
+            new THREE.Color(0xff3300),
+            t
+        );
+        sunEmissive = new THREE.Color().lerpColors(
+            new THREE.Color(0xffaa00),
+            new THREE.Color(0xff4500),
+            t
+        );
+        sunMesh.visible = elevation > -0.2;
     } else {
         intensity = 0.15;
         lightColor = new THREE.Color(0x4d4d88);
+        sunMesh.visible = false; // 밤에는 태양 숨김
     }
     
     directionalLight.intensity = intensity;
     directionalLight.color = lightColor;
     ambientLight.intensity = 0.3 + intensity * 0.3;
     hemisphereLight.intensity = 0.3 + intensity * 0.2;
+    
+    // 태양 메시 색상 업데이트
+    if (sunMesh.visible) {
+        sunMesh.material.color = sunColor;
+        sunMesh.material.emissive = sunEmissive;
+        sunMesh.material.emissiveIntensity = 0.8 + intensity * 0.4;
+        
+        // 후광 투명도 조정
+        const glow = sunMesh.children[0];
+        if (glow) {
+            glow.material.opacity = 0.2 + intensity * 0.2;
+        }
+    }
 }
 
 // 모델 로드
