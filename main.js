@@ -689,6 +689,90 @@ class Cloud3DParticles {
         this.particleSystem = null;
         this.particleCount = 5000;
         this.enabled = false;
+        this.shadowPlane = null;
+        this.shadowCanvas = null;
+        this.shadowContext = null;
+        this.cloudPositions = [];
+        this.initShadowSystem();
+    }
+    
+    // 그림자 시스템 초기화
+    initShadowSystem() {
+        // 512x512 캔버스로 그림자 텍스처 생성
+        this.shadowCanvas = document.createElement('canvas');
+        this.shadowCanvas.width = 512;
+        this.shadowCanvas.height = 512;
+        this.shadowContext = this.shadowCanvas.getContext('2d');
+        
+        // 그림자 평면 (모델 위에 배치)
+        const shadowTexture = new THREE.CanvasTexture(this.shadowCanvas);
+        const shadowMaterial = new THREE.MeshBasicMaterial({
+            map: shadowTexture,
+            transparent: true,
+            opacity: 0.4,
+            depthWrite: false,
+            blending: THREE.MultiplyBlending
+        });
+        
+        const shadowGeometry = new THREE.PlaneGeometry(20, 20);
+        this.shadowPlane = new THREE.Mesh(shadowGeometry, shadowMaterial);
+        this.shadowPlane.rotation.x = -Math.PI / 2; // 수평으로
+        this.shadowPlane.position.y = 0.01; // 모델 바로 위
+        this.scene.add(this.shadowPlane);
+    }
+    
+    // 태양 위치에 따른 구름 그림자 업데이트
+    updateCloudShadows(sunPosition) {
+        if (!this.enabled || !this.shadowContext || this.cloudPositions.length === 0) return;
+        
+        const ctx = this.shadowContext;
+        const canvas = this.shadowCanvas;
+        
+        // 캔버스 초기화 (투명)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 태양 방향 벡터 (정규화)
+        const sunDir = new THREE.Vector3(
+            sunPosition.x,
+            sunPosition.y,
+            sunPosition.z
+        ).normalize();
+        
+        // 각 구름 파티클의 그림자 투영
+        this.cloudPositions.forEach(cloud => {
+            // 태양 반대 방향으로 그림자 투영
+            const shadowOffset = {
+                x: -sunDir.x * cloud.y * 0.5,
+                z: -sunDir.z * cloud.y * 0.5
+            };
+            
+            // 월드 좌표를 캔버스 좌표로 변환 (-10~10 -> 0~512)
+            const canvasX = ((cloud.x + shadowOffset.x + 10) / 20) * canvas.width;
+            const canvasY = ((cloud.z + shadowOffset.z + 10) / 20) * canvas.height;
+            
+            // 구름 높이에 따른 그림자 크기와 투명도
+            const shadowSize = 3 + cloud.y * 2;
+            const shadowAlpha = 0.3 + (cloud.y / 3) * 0.3;
+            
+            // 그라디언트 그림자 그리기
+            const gradient = ctx.createRadialGradient(
+                canvasX, canvasY, 0,
+                canvasX, canvasY, shadowSize
+            );
+            gradient.addColorStop(0, `rgba(0, 0, 0, ${shadowAlpha})`);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(
+                canvasX - shadowSize,
+                canvasY - shadowSize,
+                shadowSize * 2,
+                shadowSize * 2
+            );
+        });
+        
+        // 텍스처 업데이트
+        this.shadowPlane.material.map.needsUpdate = true;
     }
     
     // Mock 구름 높이 데이터 생성
@@ -696,22 +780,25 @@ class Cloud3DParticles {
         const positions = [];
         const colors = [];
         const sizes = [];
+        this.cloudPositions = []; // 그림자 계산용
         
         for (let i = 0; i < this.particleCount; i++) {
             // 산청군 영역 내 랜덤 위치 (모델 범위에 맞춤)
-            const x = (Math.random() - 0.5) * 40;
-            const z = (Math.random() - 0.5) * 40;
+            const x = (Math.random() - 0.5) * 20;
+            const z = (Math.random() - 0.5) * 20;
             
-            // 구름 높이 (모델 바로 위 10~25 높이)
-            // 지형 최고점 + 여유 공간
-            const height = 10 + Math.random() * 15;
+            // 구름 높이 (모델 바로 위 1~3 높이)
+            const height = 1 + Math.random() * 2;
+            
+            // 그림자 계산용 위치 저장
+            this.cloudPositions.push({ x, y: height, z });
             
             // 높이에 따른 색상 (낮을수록 어둡게)
-            const brightness = 0.6 + (height / 25) * 0.4;
+            const brightness = 0.7 + (height / 3) * 0.3;
             colors.push(brightness, brightness, brightness + 0.1);
             
             // 높이에 따른 크기
-            sizes.push(0.3 + (height / 25) * 0.4);
+            sizes.push(0.4 + (height / 3) * 0.3);
             
             positions.push(x, height, z);
         }
@@ -762,16 +849,25 @@ class Cloud3DParticles {
         const positions = this.particleSystem.geometry.attributes.position.array;
         
         for (let i = 0; i < positions.length; i += 3) {
+            const cloudIndex = i / 3;
+            
             // X축으로 천천히 이동 (바람 효과)
             positions[i] += 0.01;
             
             // 경계 넘어가면 반대편으로
-            if (positions[i] > 30) {
-                positions[i] = -30;
+            if (positions[i] > 10) {
+                positions[i] = -10;
             }
             
             // Y축 살짝 변화 (구름 흔들림)
             positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+            
+            // 그림자 계산용 위치도 업데이트
+            if (this.cloudPositions[cloudIndex]) {
+                this.cloudPositions[cloudIndex].x = positions[i];
+                this.cloudPositions[cloudIndex].y = positions[i + 1];
+                this.cloudPositions[cloudIndex].z = positions[i + 2];
+            }
         }
         
         this.particleSystem.geometry.attributes.position.needsUpdate = true;
@@ -1274,6 +1370,15 @@ loader.load(
                 child.castShadow = true;
                 child.receiveShadow = true;
                 
+                // 기본 재질이 없으면 추가
+                if (!child.material) {
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: 0x7a9b76,
+                        roughness: 0.8,
+                        metalness: 0.2
+                    });
+                }
+                
                 const positions = child.geometry.attributes.position;
                 if (positions) {
                     totalVertices += positions.count;
@@ -1538,8 +1643,9 @@ function updateWeatherUI(data) {
     
     // 5단계: AI 강수 예측 데이터 추가 및 예측
     rainfallPredictor.addHistoricalData(data);
-    const prediction = rainfallPredictor.predict(data);
-    rainfallPredictor.updatePredictionUI(prediction);
+    rainfallPredictor.predict(data).then(prediction => {
+        rainfallPredictor.updatePredictionUI(prediction);
+    });
 }
 
 // 자동 업데이트 토글 버튼
@@ -1647,6 +1753,12 @@ console.log('💡 기상청 API 키 설정: weatherAPI.apiKey = "YOUR_KEY"');
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    
+    // 구름 그림자 업데이트 (태양 위치 기반)
+    if (cloud3DParticles.enabled && directionalLight) {
+        cloud3DParticles.updateCloudShadows(directionalLight.position);
+    }
+    
     renderer.render(scene, camera);
 }
 animate();
