@@ -154,10 +154,11 @@ body {
     padding: 20px;
     border-radius: 10px;
     color: white;
-    z-index: 100;
+    z-index: 150;
     backdrop-filter: blur(10px);
     min-width: 250px;
     border: 2px solid rgba(255, 100, 100, 0.3);
+    display: block !important;
 }
 
 #flood-control label {
