@@ -59,6 +59,36 @@
             </div>
         </div>
     </div>
+    <div id="heavy-rain-alert" style="display: none;">
+        <div class="alert-header">
+            <h3 id="alertStatus">⚠️ WARNING</h3>
+        </div>
+        <div class="alert-content">
+            <p id="alertDetails">호우 경보 메시지</p>
+        </div>
+    </div>
+    <div id="satellite-control">
+        <div class="satellite-header">
+            <h3>🛰️ 천리안 위성 영상</h3>
+            <button id="toggleSatellite" class="toggle-btn active">표시 ON</button>
+        </div>
+        <div class="satellite-controls">
+            <label for="satelliteOpacity">투명도: <span id="opacityValue">40%</span></label>
+            <input type="range" id="satelliteOpacity" min="0" max="100" step="5" value="40">
+            
+            <label for="satelliteType">영상 타입:</label>
+            <select id="satelliteType">
+                <option value="daynight">Day/Night RGB</option>
+                <option value="natural">Natural Color</option>
+                <option value="ir105">적외선 10.5μm</option>
+                <option value="wv069">수증기 6.9μm</option>
+            </select>
+            
+            <div class="satellite-info">
+                <span class="label">업데이트 주기: 10분</span>
+            </div>
+        </div>
+    </div>
     <div id="loading">모델 로딩 중...</div>
     <script type="module" src="main.js"></script>
 </body>

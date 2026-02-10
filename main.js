@@ -160,6 +160,345 @@ class WeatherAPI {
 // 전역 WeatherAPI 인스턴스
 const weatherAPI = new WeatherAPI();
 
+// =====================================
+// 천리안 위성 영상 오버레이 클래스
+// =====================================
+class SatelliteImageOverlay {
+    constructor(scene, apiKey) {
+        this.scene = scene;
+        this.apiKey = apiKey;
+        this.baseUrl = 'http://nmsc.kma.go.kr/enhd/api';
+        this.overlayPlane = null;
+        this.currentImage = null;
+        this.updateInterval = 10 * 60 * 1000; // 10분
+        this.enabled = true;
+        
+        // 위성 영상 타입
+        this.imageTypes = {
+            daynight: 'Day/Night RGB',
+            natural: 'Natural Color',
+            ir105: 'Infrared 10.5μm',
+            wv069: 'Water Vapor 6.9μm'
+        };
+        this.currentType = 'daynight';
+    }
+    
+    // Mock 위성 영상 생성 (API 실패 시)
+    generateMockSatelliteTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // 그라디언트 배경 (구름 효과)
+        const gradient = ctx.createRadialGradient(256, 256, 50, 256, 256, 300);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+        gradient.addColorStop(0.5, 'rgba(200, 220, 255, 0.5)');
+        gradient.addColorStop(1, 'rgba(150, 180, 220, 0.2)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // 랜덤 구름 패턴
+        for (let i = 0; i < 20; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const radius = Math.random() * 50 + 30;
+            const cloudGradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+            cloudGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+            cloudGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = cloudGradient;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        return texture;
+    }
+    
+    // 위성 영상 다운로드
+    async fetchSatelliteImage(type = 'daynight') {
+        try {
+            // CORS 이슈로 인해 Mock 데이터 사용
+            console.log(`🛰️ 위성 영상 로드 시도: ${type}`);
+            
+            // 실제 API 호출 (CORS 프록시 필요)
+            // const url = `${this.baseUrl}/rgbImg/latest?api_key=${this.apiKey}&area=ko&rgb_type=${type}`;
+            // const response = await fetch(url);
+            
+            // Mock 텍스처 생성
+            const texture = this.generateMockSatelliteTexture();
+            console.log('✅ Mock 위성 영상 생성 완료');
+            return texture;
+            
+        } catch (error) {
+            console.warn('위성 영상 로드 실패, Mock 데이터 사용:', error);
+            return this.generateMockSatelliteTexture();
+        }
+    }
+    
+    // 3D 씬에 오버레이 추가
+    async create3DOverlay() {
+        // 기존 오버레이 제거
+        if (this.overlayPlane) {
+            this.scene.remove(this.overlayPlane);
+            this.overlayPlane.geometry.dispose();
+            this.overlayPlane.material.dispose();
+        }
+        
+        const texture = await this.fetchSatelliteImage(this.currentType);
+        
+        const geometry = new THREE.PlaneGeometry(80, 80);
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide
+        });
+        
+        this.overlayPlane = new THREE.Mesh(geometry, material);
+        this.overlayPlane.rotation.x = -Math.PI / 2;
+        this.overlayPlane.position.y = 15; // 지형 위
+        this.overlayPlane.name = 'satelliteOverlay';
+        
+        this.scene.add(this.overlayPlane);
+        console.log('✅ 위성 영상 오버레이 추가됨');
+        
+        return this.overlayPlane;
+    }
+    
+    // 자동 업데이트 시작
+    startAutoUpdate() {
+        this.enabled = true;
+        
+        // 즉시 첫 이미지 로드
+        this.create3DOverlay();
+        
+        // 10분마다 업데이트
+        this.intervalId = setInterval(() => {
+            if (this.enabled) {
+                this.create3DOverlay();
+                console.log('🛰️ 위성 영상 자동 갱신');
+            }
+        }, this.updateInterval);
+        
+        console.log('✅ 위성 영상 자동 업데이트 시작 (10분 주기)');
+    }
+    
+    // 자동 업데이트 중지
+    stopAutoUpdate() {
+        this.enabled = false;
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+        }
+    }
+    
+    // 영상 타입 변경
+    async changeImageType(type) {
+        this.currentType = type;
+        await this.create3DOverlay();
+        console.log(`🛰️ 위성 영상 타입 변경: ${this.imageTypes[type]}`);
+    }
+    
+    // 투명도 조절
+    setOpacity(opacity) {
+        if (this.overlayPlane) {
+            this.overlayPlane.material.opacity = opacity;
+        }
+    }
+    
+    // 표시/숨김 토글
+    toggle() {
+        if (this.overlayPlane) {
+            this.overlayPlane.visible = !this.overlayPlane.visible;
+        }
+    }
+}
+
+// =====================================
+// 호우 구역 자동 감지 시스템
+// =====================================
+class HeavyRainDetector {
+    constructor(scene) {
+        this.scene = scene;
+        this.warningMarkers = [];
+        this.alertLevel = 'SAFE';
+        this.detectionEnabled = true;
+        
+        // 경보 기준
+        this.thresholds = {
+            SAFE: { rainfall: 0, color: 0x44ff44, icon: '✅' },
+            WATCH: { rainfall: 10, color: 0xffff44, icon: '⚠️' },
+            WARNING: { rainfall: 30, color: 0xff8844, icon: '🚨' },
+            CRITICAL: { rainfall: 50, color: 0xff4444, icon: '🆘' }
+        };
+    }
+    
+    // 강수량 기반 호우 위험도 분석
+    analyzeRainfallRisk(currentRainfall, forecast6h = 0) {
+        let level = 'SAFE';
+        
+        if (currentRainfall >= 50 || forecast6h >= 100) {
+            level = 'CRITICAL'; // 호우경보
+        } else if (currentRainfall >= 30 || forecast6h >= 60) {
+            level = 'WARNING'; // 호우주의보
+        } else if (currentRainfall >= 10 || forecast6h >= 30) {
+            level = 'WATCH'; // 주의
+        }
+        
+        this.alertLevel = level;
+        return level;
+    }
+    
+    // Mock 구름 데이터 생성 (실제로는 위성 데이터 분석)
+    generateMockCloudData(rainfallIntensity) {
+        const clouds = [];
+        const count = Math.floor(rainfallIntensity / 10) + 3;
+        
+        for (let i = 0; i < count; i++) {
+            clouds.push({
+                lat: 35.4 + (Math.random() - 0.5) * 0.2,
+                lon: 127.87 + (Math.random() - 0.5) * 0.2,
+                height: 8000 + Math.random() * 6000, // 8-14km
+                temperature: -40 - Math.random() * 30, // -40~-70°C
+                intensity: rainfallIntensity * (0.8 + Math.random() * 0.4),
+                x: (Math.random() - 0.5) * 40,
+                z: (Math.random() - 0.5) * 40
+            });
+        }
+        
+        return clouds;
+    }
+    
+    // 3D 경고 마커 생성
+    createWarningMarker(position, intensity, level) {
+        const threshold = this.thresholds[level];
+        
+        // 원기둥 마커
+        const geometry = new THREE.CylinderGeometry(1, 1, 8, 8);
+        const material = new THREE.MeshBasicMaterial({
+            color: threshold.color,
+            transparent: true,
+            opacity: 0.6,
+            wireframe: true
+        });
+        
+        const marker = new THREE.Mesh(geometry, material);
+        marker.position.set(position.x, 4, position.z);
+        marker.userData = { intensity, level };
+        
+        // 펄스 애니메이션
+        marker.scale.set(1, 1, 1);
+        this.animateMarker(marker);
+        
+        this.scene.add(marker);
+        this.warningMarkers.push(marker);
+        
+        return marker;
+    }
+    
+    // 마커 펄스 애니메이션
+    animateMarker(marker) {
+        let scale = 1;
+        let direction = 1;
+        
+        const animate = () => {
+            scale += direction * 0.02;
+            if (scale >= 1.3 || scale <= 0.9) direction *= -1;
+            
+            marker.scale.set(1, scale, 1);
+            
+            if (this.warningMarkers.includes(marker)) {
+                requestAnimationFrame(animate);
+            }
+        };
+        
+        animate();
+    }
+    
+    // 기존 마커 제거
+    clearMarkers() {
+        this.warningMarkers.forEach(marker => {
+            this.scene.remove(marker);
+            marker.geometry.dispose();
+            marker.material.dispose();
+        });
+        this.warningMarkers = [];
+    }
+    
+    // 호우 감지 실행
+    detectHeavyRain(currentRainfall) {
+        if (!this.detectionEnabled) return;
+        
+        // 기존 마커 제거
+        this.clearMarkers();
+        
+        // 위험도 분석
+        const level = this.analyzeRainfallRisk(currentRainfall);
+        
+        // Mock 구름 데이터 생성
+        const clouds = this.generateMockCloudData(currentRainfall);
+        
+        // 위험 구역에 마커 표시
+        clouds.forEach(cloud => {
+            if (cloud.height > 12000 || cloud.temperature < -50) {
+                this.createWarningMarker(
+                    { x: cloud.x, z: cloud.z },
+                    cloud.intensity,
+                    level
+                );
+            }
+        });
+        
+        // UI 업데이트
+        this.updateAlertUI(level, currentRainfall, clouds.length);
+        
+        console.log(`🌩️ 호우 감지: ${level} - 감지된 대류운: ${clouds.length}개`);
+    }
+    
+    // 경보 UI 업데이트
+    updateAlertUI(level, rainfall, cloudCount) {
+        const alertElement = document.getElementById('heavyRainAlert');
+        const alertStatus = document.getElementById('alertStatus');
+        const alertDetails = document.getElementById('alertDetails');
+        
+        if (!alertElement || !alertStatus || !alertDetails) return;
+        
+        const threshold = this.thresholds[level];
+        
+        alertStatus.textContent = `${threshold.icon} ${level}`;
+        alertStatus.style.color = `#${threshold.color.toString(16).padStart(6, '0')}`;
+        
+        let message = '';
+        if (level === 'CRITICAL') {
+            message = `⚠️ 호우경보! 현재 강수량 ${rainfall}mm/h. 즉시 대피 준비!`;
+        } else if (level === 'WARNING') {
+            message = `⚠️ 호우주의보. 강수량 ${rainfall}mm/h. 침수 위험 지역 주의!`;
+        } else if (level === 'WATCH') {
+            message = `⚠️ 주의. 강수량 ${rainfall}mm/h. 기상 변화 모니터링 중.`;
+        } else {
+            message = `✅ 안전. 현재 강수량 ${rainfall}mm/h.`;
+        }
+        
+        alertDetails.textContent = `${message} | 감지된 대류운: ${cloudCount}개`;
+        
+        // 경보 패널 표시
+        if (level !== 'SAFE') {
+            alertElement.style.display = 'block';
+        } else {
+            alertElement.style.display = 'none';
+        }
+    }
+    
+    // 자동 감지 활성화/비활성화
+    toggle() {
+        this.detectionEnabled = !this.detectionEnabled;
+        if (!this.detectionEnabled) {
+            this.clearMarkers();
+        }
+    }
+}
+
 // Scene 설정
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a0a);
@@ -191,6 +530,12 @@ const verticalGrid4 = new THREE.GridHelper(gridSize, gridDivisions, 0x303030, 0x
 verticalGrid4.rotation.x = Math.PI / 2;
 verticalGrid4.position.z = 50;
 scene.add(verticalGrid4);
+
+// 위성 영상 오버레이 초기화
+const satelliteOverlay = new SatelliteImageOverlay(scene, weatherAPI.apiKey);
+
+// 호우 감지 시스템 초기화
+const heavyRainDetector = new HeavyRainDetector(scene);
 
 // Camera 설정
 const camera = new THREE.PerspectiveCamera(
@@ -589,6 +934,9 @@ function updateWeatherUI(data) {
         
         console.log(`🌧️ 강수량 ${data.rainfall}mm/h → 침수 레벨 ${floodLevel}% 자동 설정`);
     }
+    
+    // 2단계: 호우 구역 자동 감지
+    heavyRainDetector.detectHeavyRain(data.rainfall);
 }
 
 // 자동 업데이트 토글 버튼
@@ -610,7 +958,44 @@ if (toggleAutoBtn) {
 // 실시간 기상 데이터 자동 업데이트 시작
 weatherAPI.startAutoUpdate(updateWeatherUI);
 
+// =====================================
+// 1단계: 위성 영상 오버레이 UI 연동
+// =====================================
+// 위성 영상 자동 업데이트 시작
+satelliteOverlay.startAutoUpdate();
+
+// 위성 영상 토글 버튼
+const toggleSatelliteBtn = document.getElementById('toggleSatellite');
+if (toggleSatelliteBtn) {
+    toggleSatelliteBtn.addEventListener('click', () => {
+        satelliteOverlay.toggle();
+        const isVisible = satelliteOverlay.overlayPlane?.visible ?? false;
+        toggleSatelliteBtn.textContent = isVisible ? '표시 ON' : '표시 OFF';
+        toggleSatelliteBtn.classList.toggle('active', isVisible);
+    });
+}
+
+// 투명도 슬라이더
+const opacitySlider = document.getElementById('satelliteOpacity');
+const opacityValue = document.getElementById('opacityValue');
+if (opacitySlider && opacityValue) {
+    opacitySlider.addEventListener('input', (e) => {
+        const opacity = e.target.value / 100;
+        satelliteOverlay.setOpacity(opacity);
+        opacityValue.textContent = `${e.target.value}%`;
+    });
+}
+
+// 영상 타입 선택
+const satelliteTypeSelect = document.getElementById('satelliteType');
+if (satelliteTypeSelect) {
+    satelliteTypeSelect.addEventListener('change', (e) => {
+        satelliteOverlay.changeImageType(e.target.value);
+    });
+}
+
 console.log('🛰️ 실시간 기상 데이터 연동 시작');
+console.log('🛰️ 천리안 위성 영상 오버레이 활성화');
 console.log('💡 Mock 데이터 사용 중 (실제 API 사용: weatherAPI.useRealAPI = true)');
 console.log('💡 기상청 API 키 설정: weatherAPI.apiKey = "YOUR_KEY"');
 
